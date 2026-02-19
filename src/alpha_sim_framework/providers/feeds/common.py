@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from ...alpha_types import ExternalFeedConfig, ProviderRuntimeConfig
+from .free_api import fetch_free_feed
 
 
 def _utc_now() -> str:
@@ -92,6 +93,16 @@ def _coerce_feed_envelope(value: Any, base_quality_flags: list, base_warnings: l
     return payload
 
 
+def _expand_mapping_env(data: Dict[str, Any]) -> Dict[str, Any]:
+    expanded: Dict[str, Any] = {}
+    for key, value in dict(data or {}).items():
+        resolved = _expand_env_string(value)
+        if _is_unresolved_placeholder(resolved):
+            resolved = None
+        expanded[str(key)] = resolved
+    return expanded
+
+
 class JSONFeedClient:
     def __init__(self, feed_name: str, config: ExternalFeedConfig, runtime: ProviderRuntimeConfig):
         self.feed_name = str(feed_name)
@@ -118,10 +129,8 @@ class JSONFeedClient:
                 base_warnings=[],
             )
 
-        endpoint_map = _normalize_mapping(self.config.endpoints)
-        endpoint = _expand_env_string(endpoint_map.get(self.feed_name))
-        if _is_unresolved_placeholder(endpoint):
-            endpoint = None
+        endpoint_map = _expand_mapping_env(_normalize_mapping(self.config.endpoints))
+        endpoint = endpoint_map.get(self.feed_name)
         endpoint = endpoint or os.getenv(f"ALPHA_{self.feed_name.upper()}_ENDPOINT")
         if not endpoint:
             payload["quality_flags"].append("endpoint_not_configured")
@@ -131,21 +140,33 @@ class JSONFeedClient:
             str(key): str(_expand_env_string(value))
             for key, value in dict(_normalize_mapping(self.config.request_headers)).items()
         }
-        api_keys = _normalize_mapping(self.config.api_keys)
-        api_key = _expand_env_string(api_keys.get(self.feed_name))
-        if _is_unresolved_placeholder(api_key):
-            api_key = None
+        api_keys = _expand_mapping_env(_normalize_mapping(self.config.api_keys))
+        api_key = api_keys.get(self.feed_name)
         api_key = api_key or os.getenv(f"ALPHA_{self.feed_name.upper()}_API_KEY")
         if api_key and "Authorization" not in headers:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        params = _league_params(league, week)
-        query = urllib.parse.urlencode(params)
-        url = f"{endpoint}{'&' if '?' in endpoint else '?'}{query}"
-
         retries = max(0, int(getattr(self.runtime, "retries", 1)))
         timeout = float(getattr(self.runtime, "timeout_seconds", 2.0))
         backoff = float(getattr(self.runtime, "backoff_seconds", 0.2))
+
+        if str(endpoint).startswith("free://"):
+            return fetch_free_feed(
+                feed_name=self.feed_name,
+                endpoint=str(endpoint),
+                endpoint_map=endpoint_map,
+                api_keys=api_keys,
+                headers=headers,
+                league=league,
+                week=week,
+                timeout=timeout,
+                retries=retries,
+                backoff=backoff,
+            )
+
+        params = _league_params(league, week)
+        query = urllib.parse.urlencode(params)
+        url = f"{endpoint}{'&' if '?' in endpoint else '?'}{query}"
 
         last_error = ""
         for attempt in range(retries + 1):

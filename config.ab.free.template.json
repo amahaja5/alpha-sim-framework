@@ -1,0 +1,98 @@
+{
+  "league": {
+    "league_id": 123456,
+    "team_id": 1,
+    "year": 2025,
+    "swid": null,
+    "espn_s2": null
+  },
+  "profile": "default",
+  "simulation": {
+    "simulations": 5000,
+    "seeds": 7,
+    "alpha_config": {
+      "alpha_blend": 0.35,
+      "candidate_pool_size": 30
+    }
+  },
+  "evaluation": {
+    "weeks": "auto",
+    "use_context": false,
+    "lookback_seasons": 3,
+    "include_playoffs": false
+  },
+  "gate": {
+    "min_weekly_points_lift": 0.0,
+    "max_downside_probability": 0.4,
+    "min_successful_seeds": 3
+  },
+  "alpha_provider": {
+    "class_path": "alpha_sim_framework.providers:CompositeSignalProvider",
+    "kwargs": {
+      "enable_extended_signals": true,
+      "weights": {
+        "projection_residual": 0.2,
+        "usage_trend": 0.12,
+        "injury_opportunity": 0.14,
+        "matchup_unit": 0.1,
+        "game_script": 0.09,
+        "volatility_aware": 0.08,
+        "weather_venue": 0.07,
+        "market_sentiment_contrarian": 0.07,
+        "waiver_replacement_value": 0.06,
+        "short_term_schedule_cluster": 0.07,
+        "player_tilt_leverage": 0.08,
+        "vegas_props": 0.1,
+        "win_probability_script": 0.07,
+        "backup_quality_adjustment": 0.04,
+        "red_zone_opportunity": 0.05,
+        "snap_count_percentage": 0.05,
+        "line_movement": 0.04
+      },
+      "caps": {
+        "player_tilt_leverage": [-1.5, 1.5],
+        "vegas_props": [-2.0, 2.0],
+        "win_probability_script": [-1.75, 1.75],
+        "backup_quality_adjustment": [-0.75, 0.75],
+        "red_zone_opportunity": [-1.25, 1.25],
+        "snap_count_percentage": [-1.0, 1.0],
+        "line_movement": [-1.25, 1.25],
+        "total_adjustment": [-6.0, 6.0],
+        "matchup_multiplier": [0.85, 1.15]
+      },
+      "runtime": {
+        "timeout_seconds": 2.0,
+        "retries": 1,
+        "cache_ttl_seconds": 300,
+        "degrade_gracefully": true,
+        "canonical_contract_mode": "warn",
+        "canonical_contract_domains": ["weather", "market", "odds", "injury_news", "nextgenstats"]
+      },
+      "external_feeds": {
+        "enabled": true,
+        "endpoints": {
+          "weather": "free://weather",
+          "market": "free://market",
+          "odds": "free://odds",
+          "injury_news": "free://injury_news",
+          "nextgenstats": "free://nextgenstats",
+          "weather_forecast": "https://api.open-meteo.com/v1/forecast",
+          "weather_lat": 39.9008,
+          "weather_lon": -75.1675,
+          "market_players": "https://api.sleeper.app/v1/players/nfl",
+          "market_trending_add": "https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=24&limit=200",
+          "market_trending_drop": "https://api.sleeper.app/v1/players/nfl/trending/drop?lookback_hours=24&limit=200",
+          "injury_players": "https://api.sleeper.app/v1/players/nfl",
+          "odds_nfl": "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds?regions=us&markets=h2h,spreads,totals"
+        },
+        "api_keys": {
+          "odds": "${ODDS_API_KEY}"
+        },
+        "static_payloads": {}
+      }
+    }
+  },
+  "output": {
+    "output_dir": "reports/ab_runs"
+  }
+}

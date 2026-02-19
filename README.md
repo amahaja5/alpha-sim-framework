@@ -16,6 +16,7 @@ Standalone NFL decision/simulation framework that integrates with `espn_api` lea
 
 ```bash
 uv sync
+git config core.hooksPath .githooks
 ```
 
 ## Quick Run
@@ -54,6 +55,19 @@ uv run fantasy-decision-maker \
   --ab-config config.ab.template.json \
   --ab-eval
 ```
+
+## A/B With Free API Gateways (No Separate Service)
+
+Use `config.ab.free.template.json` to run canonical feed ingestion directly from free sources
+(`free://...` adapters for Open-Meteo + Sleeper + league-derived heuristics):
+
+```bash
+uv run fantasy-decision-maker \
+  --ab-config config.ab.free.template.json \
+  --ab-eval
+```
+
+Optional: set `ODDS_API_KEY` to enrich `odds` from The Odds API free tier.
 
 ## Gateway Endpoint Discovery
 

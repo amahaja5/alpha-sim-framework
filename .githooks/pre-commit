@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scripts/check_no_private_cookies.sh
+scripts/check_docs_references.sh

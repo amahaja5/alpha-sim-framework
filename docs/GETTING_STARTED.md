@@ -107,6 +107,14 @@ cp config.ab.template.json config.ab.json
 uv run fantasy-decision-maker --ab-config config.ab.json --ab-eval
 ```
 
+Free-source shortcut (no standalone gateway service):
+
+```bash
+cp config.ab.free.template.json config.ab.free.json
+# edit league/team/year (+ optional private-league cookies)
+uv run fantasy-decision-maker --ab-config config.ab.free.json --ab-eval
+```
+
 Optional provider override:
 
 ```bash

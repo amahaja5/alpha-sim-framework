@@ -5,6 +5,12 @@ __pycache__/
 reports/
 data/league_context/
 config.json
+config.ab.json
+config.ab.free.json
+config.*.local.json
+.env
+.env.*
+!.env.example
 
 *.egg-info/
 uv.lock
