@@ -1,0 +1,47 @@
+# Features
+
+## Simulators
+
+### `AdvancedFantasySimulator`
+
+Implemented in `src/alpha_sim_framework/advanced_simulator.py`.
+
+Primary capabilities:
+- Matchup simulation (`simulate_matchup`)
+- Trade analysis (`analyze_trade`, `find_trade_opportunities`)
+- Free-agent recommendation (`recommend_free_agents`)
+
+### `MonteCarloSimulator`
+
+Implemented in `src/alpha_sim_framework/monte_carlo.py`.
+
+Primary capabilities:
+- Season and playoff simulation (`simulate_season`, `simulate_playoffs`, `run_simulations`)
+- Move optimization (`get_optimal_moves`)
+- Draft strategy analysis (`analyze_draft_strategy`)
+- Alpha APIs (`recommend_lineup`, `backtest_alpha`)
+
+## Alpha Mode, Explainability, and Provider Hooks
+
+- Alpha mode is opt-in through `MonteCarloSimulator(..., alpha_mode=True, alpha_config=..., provider=...)`.
+- Explainability is available through:
+  - `run_simulations(explain=True)`
+  - `get_optimal_moves(..., explain=True)`
+  - `recommend_lineup(..., explain=True)`
+- External signal providers are supported through `alpha_provider` wrappers for safe fallback behavior.
+
+## League Adapter Usage
+
+`from_espn_league(...)` (in `src/alpha_sim_framework/league_adapter.py`) converts a live `espn_api.football.League` object into the internal `LeagueLike` simulator context.
+
+## Notable Changes
+
+- Added alpha-layer modules and APIs for lineup recommendation and backtesting.
+- Improved NFL schedule handling and deterministic simulation support.
+- Added stronger test coverage around alpha model behavior and snapshot fallbacks.
+
+## Limits and Non-Goals
+
+- This package does not reimplement `espn_api`; it consumes `espn_api` objects.
+- Historical deep-dive fix narratives were consolidated into this feature summary and `CHANGELOG.md`.
+- No backward-compat documentation for old script-style commands is maintained.

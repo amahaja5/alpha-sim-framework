@@ -398,17 +398,17 @@ def main():
         epilog="""
 Examples:
   # Using config file
-  python fantasy_decision_maker.py --config config.json
+  uv run fantasy-decision-maker --config config.json
 
   # Public league (command line)
-  python fantasy_decision_maker.py --league-id 123456 --team-id 1
+  uv run fantasy-decision-maker --league-id 123456 --team-id 1
 
   # Private league
-  python fantasy_decision_maker.py --league-id 123456 --team-id 1 \\
+  uv run fantasy-decision-maker --league-id 123456 --team-id 1 \\
       --swid "{YOUR-SWID-HERE}" --espn-s2 "{YOUR-ESPN-S2-HERE}"
 
   # Quick report generation (non-interactive)
-  python fantasy_decision_maker.py --league-id 123456 --team-id 1 --report-only
+  uv run fantasy-decision-maker --league-id 123456 --team-id 1 --report-only
 
 Getting ESPN Cookies for Private Leagues:
   1. Log into ESPN Fantasy Football in your browser

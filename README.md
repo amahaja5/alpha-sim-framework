@@ -1,31 +1,28 @@
 # Alpha Sim Framework
 
-Standalone extraction of the NFL decision/simulation utilities with `espn_api` as an external dependency.
+Standalone NFL decision/simulation framework that integrates with `espn_api` league objects.
 
-## Includes
+## What It Includes
 
-- `AdvancedFantasySimulator` (GMM + matchup/trade/free-agent analysis)
-- `MonteCarloSimulator` (alpha mode, explainability, backtest)
-- Alpha utility modules (`alpha_*`, provider, snapshot, contracts)
-- `fantasy_decision_maker` CLI
+- `AdvancedFantasySimulator` for matchup, trade, and free-agent analysis
+- `MonteCarloSimulator` for season/playoff simulation plus alpha-mode workflows
+- Alpha utility modules (`alpha_model`, `alpha_snapshot`, `alpha_backtest`, `alpha_provider`, `alpha_types`)
+- League adapter (`from_espn_league`) to convert live ESPN objects into a stable internal shape
+- CLI entrypoint: `fantasy-decision-maker`
 
 ## Install
 
 ```bash
-pip install -e .
+uv sync
 ```
 
-## Usage
+## Quick Run
 
 ```bash
-fantasy-decision-maker --league-id <LEAGUE_ID> --team-id <TEAM_ID> --year 2024
+uv run fantasy-decision-maker --league-id <LEAGUE_ID> --team-id <TEAM_ID> --year <YEAR>
 ```
 
-This package expects league/team/player objects from `espn_api.football.League`.
-
-## League Adapter Template
-
-Use `from_espn_league` to freeze live ESPN objects into a stable `LeagueLike` shape:
+## Python Usage (Adapter + Simulator)
 
 ```python
 from espn_api.football import League
@@ -38,10 +35,10 @@ sim = MonteCarloSimulator(league_ctx, num_simulations=2000, alpha_mode=True)
 results = sim.run_simulations(explain=True)
 ```
 
-## Documentation Bundle
+## Docs Index
 
-This repo now includes the copied documentation set:
-
-- `/Users/amahajan/src/alpha-sim-framework/docs/`
-- `/Users/amahajan/src/alpha-sim-framework/CHANGELOG.md`
-- `/Users/amahajan/src/alpha-sim-framework/docs/README_espn_api.md`
+- [Getting Started](docs/GETTING_STARTED.md)
+- [Features](docs/FEATURES.md)
+- [Testing](docs/TESTING.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Changelog](CHANGELOG.md)
