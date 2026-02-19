@@ -37,3 +37,11 @@ league_ctx = from_espn_league(espn_league)
 sim = MonteCarloSimulator(league_ctx, num_simulations=2000, alpha_mode=True)
 results = sim.run_simulations(explain=True)
 ```
+
+## Documentation Bundle
+
+This repo now includes the copied documentation set:
+
+- `/Users/amahajan/src/alpha-sim-framework/docs/`
+- `/Users/amahajan/src/alpha-sim-framework/CHANGELOG.md`
+- `/Users/amahajan/src/alpha-sim-framework/docs/README_espn_api.md`
