@@ -322,6 +322,27 @@ class MonteCarloSimulatorTest(TestCase):
         self.assertIn("ev_delta", backtest)
         self.assertIn("brier_score", backtest)
 
+    def test_run_historical_opponent_backtest_returns_window_and_opponents(self):
+        league = build_league()
+        simulator = MonteCarloSimulator(league, num_simulations=30, seed=18, alpha_mode=True)
+        season_map = {
+            2023: build_league(),
+            2024: build_league(),
+            2025: build_league(),
+        }
+
+        backtest = simulator.run_historical_opponent_backtest(
+            config={
+                "league_id": 12345,
+                "team_id": 1,
+                "year": 2025,
+                "league_loader": lambda year: season_map[year],
+            }
+        )
+
+        self.assertEqual(backtest["analysis_window"]["years_requested"], [2023, 2024, 2025])
+        self.assertIn("opponents", backtest)
+
     def test_analyze_draft_strategy_does_not_mutate_baseline_ratings(self):
         league = build_league()
         simulator = MonteCarloSimulator(league, num_simulations=40, preseason=True, seed=9)

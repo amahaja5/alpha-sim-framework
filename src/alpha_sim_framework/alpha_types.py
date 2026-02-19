@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, Protocol
+from typing import Any, Dict, Optional, Protocol
 
 
 @dataclass
@@ -31,6 +31,16 @@ class PlayerProjection:
     weekly_std: float
     components: Dict[str, float]
     confidence: float
+
+
+@dataclass
+class HistoricalBacktestConfig:
+    start_year: Optional[int] = None
+    end_year: Optional[int] = None
+    lookback_seasons: int = 3
+    min_weeks_per_opponent: int = 2
+    include_playoffs: bool = False
+    narrative_mode: str = "rule_based"
 
 
 class ExternalSignalProvider(Protocol):

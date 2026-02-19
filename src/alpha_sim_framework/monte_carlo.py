@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from .alpha_backtest import run_backtest
+from .historical_backtest import run_historical_backtest
 from .alpha_model import project_players
 from .alpha_provider import SafeSignalProvider
 from .alpha_snapshot import build_week_snapshot
@@ -728,3 +729,6 @@ class MonteCarloSimulator:
         if not self.alpha_mode:
             raise ValueError("backtest_alpha requires alpha_mode=True")
         return run_backtest(self, config=config)
+
+    def run_historical_opponent_backtest(self, config: Optional[dict] = None) -> Dict[str, Any]:
+        return run_historical_backtest(self, config=config)

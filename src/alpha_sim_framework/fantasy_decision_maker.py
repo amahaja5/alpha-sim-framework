@@ -99,6 +99,15 @@ class FantasyDecisionMaker:
             )
             print("✅ Alpha simulator ready!\n")
 
+    def _get_monte_carlo_simulator(self) -> MonteCarloSimulator:
+        if self.alpha_simulator is None:
+            self.alpha_simulator = MonteCarloSimulator(
+                league=self.league,
+                num_simulations=self.num_simulations,
+                alpha_mode=self.alpha_mode,
+            )
+        return self.alpha_simulator
+
     def analyze_current_matchup(self):
         """Analyze current week's matchup"""
         print("=" * 80)
@@ -374,6 +383,74 @@ class FantasyDecisionMaker:
 
         print(f"✅ Report saved to: {output_file}\n")
 
+    def analyze_historical_opponents(
+        self,
+        lookback_seasons: int = 3,
+        start_year: Optional[int] = None,
+        end_year: Optional[int] = None,
+        include_playoffs: bool = False,
+        output_json: Optional[str] = None,
+        swid: Optional[str] = None,
+        espn_s2: Optional[str] = None,
+    ) -> dict:
+        print("=" * 80)
+        print("📚 HISTORICAL OPPONENT TENDENCY BACKTEST")
+        print("=" * 80)
+
+        config = {
+            "league_id": self.league_id,
+            "team_id": self.team_id,
+            "year": self.year,
+            "lookback_seasons": lookback_seasons,
+            "start_year": start_year,
+            "end_year": end_year,
+            "include_playoffs": include_playoffs,
+            "swid": swid,
+            "espn_s2": espn_s2,
+        }
+
+        simulator = self._get_monte_carlo_simulator()
+        results = simulator.run_historical_opponent_backtest(config=config)
+
+        window = results.get("analysis_window", {})
+        print(f"\nYears Requested: {window.get('years_requested', [])}")
+        print(f"Years Analyzed:  {window.get('years_analyzed', [])}")
+        skipped = window.get("years_skipped", [])
+        if skipped:
+            print(f"Years Skipped:   {skipped}")
+
+        opponents = results.get("opponents", [])
+        print(f"\nOpponents analyzed: {len(opponents)}")
+        for report in opponents[:10]:
+            metrics = report.get("quant_metrics", {})
+            confidence = report.get("confidence", {})
+            print(
+                f"- {report.get('opponent_team_name', 'Unknown')}: "
+                f"games={metrics.get('games_sampled', 0)} "
+                f"win_rate_vs_you={metrics.get('win_rate_vs_you', 0.0):.2f} "
+                f"high_ceiling_rate={metrics.get('high_ceiling_rate', 0.0):.2f} "
+                f"confidence={confidence.get('confidence_band', 'low')}"
+            )
+            print(f"  tags={', '.join(report.get('qualitative_tags', []))}")
+            print(f"  summary={report.get('narrative_summary', '')}")
+
+        warnings = results.get("warnings", [])
+        if warnings:
+            print("\nWarnings:")
+            for warning in warnings[:20]:
+                print(f"  - {warning}")
+
+        if output_json:
+            output_dir = os.path.dirname(output_json)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+            with open(output_json, "w") as file_obj:
+                json.dump(results, file_obj, indent=2, sort_keys=True)
+            print(f"\n✅ Historical backtest JSON saved to: {output_json}")
+
+        print()
+        return results
+
     def run_interactive(self):
         """Run interactive decision-making session"""
         while True:
@@ -439,6 +516,9 @@ Examples:
   # Alpha-layer season simulation output
   uv run fantasy-decision-maker --league-id 123456 --team-id 1 --alpha-mode --report-only
 
+  # Historical opponent tendencies
+  uv run fantasy-decision-maker --league-id 123456 --team-id 1 --historical-backtest --lookback-seasons 3
+
 Getting ESPN Cookies for Private Leagues:
   1. Log into ESPN Fantasy Football in your browser
   2. Open Developer Tools (F12)
@@ -468,6 +548,18 @@ Getting ESPN Cookies for Private Leagues:
                         help='Generate report and exit (non-interactive)')
     parser.add_argument('--alpha-mode', action='store_true',
                         help='Enable alpha-layer season simulation output')
+    parser.add_argument('--historical-backtest', action='store_true',
+                        help='Run historical opponent tendency backtest and exit')
+    parser.add_argument('--lookback-seasons', type=int, default=3,
+                        help='Historical backtest lookback (default: 3 seasons)')
+    parser.add_argument('--start-year', type=int, default=None,
+                        help='Historical backtest start year (inclusive)')
+    parser.add_argument('--end-year', type=int, default=None,
+                        help='Historical backtest end year (inclusive)')
+    parser.add_argument('--include-playoffs', action='store_true',
+                        help='Include playoff weeks in historical backtest')
+    parser.add_argument('--historical-output-json', type=str, default=None,
+                        help='Optional JSON path for historical backtest output')
 
     args = parser.parse_args()
 
@@ -534,7 +626,17 @@ Getting ESPN Cookies for Private Leagues:
             alpha_mode=alpha_mode,
         )
 
-        if args.report_only:
+        if args.historical_backtest:
+            dm.analyze_historical_opponents(
+                lookback_seasons=args.lookback_seasons,
+                start_year=args.start_year,
+                end_year=args.end_year,
+                include_playoffs=args.include_playoffs,
+                output_json=args.historical_output_json,
+                swid=swid,
+                espn_s2=espn_s2,
+            )
+        elif args.report_only:
             # Generate report and exit
             dm.generate_weekly_report()
         else:
