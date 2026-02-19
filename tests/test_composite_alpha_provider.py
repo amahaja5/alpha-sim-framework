@@ -151,6 +151,58 @@ def _provider_kwargs():
     }
 
 
+def _provider_kwargs_extended():
+    kwargs = _provider_kwargs()
+    kwargs["enable_extended_signals"] = True
+    static_payloads = kwargs["external_feeds"]["static_payloads"]
+
+    static_payloads["market"]["projections"]["104"] = 21.0
+    static_payloads["market"]["ownership_by_player"] = {
+        "101": 0.68,
+        "102": 0.34,
+        "103": 0.52,
+        "104": 0.12,
+        "105": 0.60,
+        "201": 0.55,
+        "202": 0.28,
+        "204": 0.40,
+    }
+
+    static_payloads["odds"]["player_props_by_player"] = {
+        "102": {"line_open": 63.5, "line_current": 71.5, "sharp_over_pct": 0.64},
+        "104": {"line_open": 74.5, "line_current": 81.5, "sharp_over_pct": 0.66},
+    }
+    static_payloads["odds"]["win_probability_by_team"] = {"1": 0.74, "2": 0.26}
+    static_payloads["odds"]["live_game_state_by_team"] = {
+        "1": {"quarter": 4, "time_remaining_sec": 120, "score_differential": 10},
+        "2": {"quarter": 4, "time_remaining_sec": 120, "score_differential": -10},
+    }
+    static_payloads["odds"]["opening_spread_by_team"] = {"1": -2.5, "2": 2.5}
+    static_payloads["odds"]["closing_spread_by_team"] = {"1": -5.5, "2": 5.5}
+
+    static_payloads["injury_news"]["backup_projection_ratio_by_player"] = {
+        "101": 0.90,
+        "102": 0.32,
+        "104": 0.72,
+    }
+
+    static_payloads["nextgenstats"]["player_metrics"]["102"] = {
+        "red_zone_touch_share": 0.27,
+        "red_zone_touch_trend": 0.05,
+        "snap_share": 0.79,
+        "snap_share_trend": 0.04,
+    }
+    static_payloads["nextgenstats"]["player_metrics"]["104"].update(
+        {
+            "red_zone_touch_share": 0.30,
+            "red_zone_touch_trend": 0.06,
+            "snap_share": 0.86,
+            "snap_share_trend": 0.05,
+        }
+    )
+    return kwargs
+
+
 class CompositeSignalProviderTest(TestCase):
     def test_outputs_adjustments_matchups_and_diagnostics(self):
         league = _build_league()
@@ -244,3 +296,109 @@ class CompositeSignalProviderTest(TestCase):
 
         self.assertTrue(any("market_contract_error" in warning for warning in provider.last_warnings))
         self.assertIn("market:contract_invalid", payload["summary"]["quality_flags"])
+
+    def test_extended_signals_disabled_preserves_legacy_weight_behavior(self):
+        league = _build_league()
+        baseline_provider = CompositeSignalProvider(**_provider_kwargs())
+        baseline_adjustments = baseline_provider.get_player_adjustments(league, week=3)
+
+        disabled_kwargs = _provider_kwargs()
+        disabled_kwargs["enable_extended_signals"] = False
+        disabled_kwargs["weights"] = {
+            "player_tilt_leverage": 25.0,
+            "vegas_props": 25.0,
+            "win_probability_script": 25.0,
+            "backup_quality_adjustment": 25.0,
+            "red_zone_opportunity": 25.0,
+            "snap_count_percentage": 25.0,
+            "line_movement": 25.0,
+        }
+        provider = CompositeSignalProvider(**disabled_kwargs)
+        test_adjustments = provider.get_player_adjustments(league, week=3)
+
+        self.assertEqual(baseline_adjustments, test_adjustments)
+
+    def test_extended_signals_enabled_emits_new_signal_keys(self):
+        league = _build_league()
+        provider = CompositeSignalProvider(**_provider_kwargs_extended())
+
+        provider.get_player_adjustments(league, week=3)
+        diagnostics = provider.last_diagnostics
+        self.assertIn(101, diagnostics)
+
+        signal_names = diagnostics[101]["signals"].keys()
+        for signal in (
+            "player_tilt_leverage",
+            "vegas_props",
+            "win_probability_script",
+            "backup_quality_adjustment",
+            "red_zone_opportunity",
+            "snap_count_percentage",
+            "line_movement",
+        ):
+            self.assertIn(signal, signal_names)
+
+    def test_player_tilt_leverage_directional(self):
+        league = _build_league()
+        provider = CompositeSignalProvider(**_provider_kwargs_extended())
+        provider.get_player_adjustments(league, week=3)
+
+        self.assertGreater(provider.last_diagnostics[104]["signals"]["player_tilt_leverage"], 0.0)
+
+    def test_vegas_props_directional(self):
+        league = _build_league()
+        provider = CompositeSignalProvider(**_provider_kwargs_extended())
+        provider.get_player_adjustments(league, week=3)
+
+        self.assertGreater(provider.last_diagnostics[104]["signals"]["vegas_props"], 0.0)
+
+    def test_win_probability_script_directional(self):
+        league = _build_league()
+        provider = CompositeSignalProvider(**_provider_kwargs_extended())
+        provider.get_player_adjustments(league, week=3)
+
+        self.assertGreater(provider.last_diagnostics[102]["signals"]["win_probability_script"], 0.0)
+
+    def test_backup_quality_adjustment_directional(self):
+        league = _build_league()
+        provider = CompositeSignalProvider(**_provider_kwargs_extended())
+        provider.get_player_adjustments(league, week=3)
+
+        self.assertGreater(provider.last_diagnostics[102]["signals"]["backup_quality_adjustment"], 0.0)
+
+    def test_red_zone_opportunity_directional(self):
+        league = _build_league()
+        provider = CompositeSignalProvider(**_provider_kwargs_extended())
+        provider.get_player_adjustments(league, week=3)
+
+        self.assertGreater(provider.last_diagnostics[104]["signals"]["red_zone_opportunity"], 0.0)
+
+    def test_snap_count_percentage_directional(self):
+        league = _build_league()
+        provider = CompositeSignalProvider(**_provider_kwargs_extended())
+        provider.get_player_adjustments(league, week=3)
+
+        self.assertGreater(provider.last_diagnostics[104]["signals"]["snap_count_percentage"], 0.0)
+
+    def test_line_movement_directional(self):
+        league = _build_league()
+        provider = CompositeSignalProvider(**_provider_kwargs_extended())
+        provider.get_player_adjustments(league, week=3)
+
+        self.assertGreater(provider.last_diagnostics[102]["signals"]["line_movement"], 0.0)
+
+    def test_missing_extended_fields_degrade_to_neutral_not_failure(self):
+        league = _build_league()
+        kwargs = _provider_kwargs()
+        kwargs["enable_extended_signals"] = True
+        provider = CompositeSignalProvider(**kwargs)
+
+        adjustments = provider.get_player_adjustments(league, week=3)
+        self.assertTrue(len(adjustments) > 0)
+        signals = provider.last_diagnostics[101]["signals"]
+        self.assertEqual(signals["vegas_props"], 0.0)
+        self.assertEqual(signals["win_probability_script"], 0.0)
+        self.assertEqual(signals["backup_quality_adjustment"], 0.0)
+        self.assertEqual(signals["red_zone_opportunity"], 0.0)
+        self.assertEqual(signals["snap_count_percentage"], 0.0)
+        self.assertEqual(signals["line_movement"], 0.0)

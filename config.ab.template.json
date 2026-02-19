@@ -29,6 +29,7 @@
   "alpha_provider": {
     "class_path": "alpha_sim_framework.providers:CompositeSignalProvider",
     "kwargs": {
+      "enable_extended_signals": false,
       "weights": {
         "projection_residual": 0.2,
         "usage_trend": 0.12,
@@ -39,9 +40,23 @@
         "weather_venue": 0.07,
         "market_sentiment_contrarian": 0.07,
         "waiver_replacement_value": 0.06,
-        "short_term_schedule_cluster": 0.07
+        "short_term_schedule_cluster": 0.07,
+        "player_tilt_leverage": 0.08,
+        "vegas_props": 0.1,
+        "win_probability_script": 0.07,
+        "backup_quality_adjustment": 0.04,
+        "red_zone_opportunity": 0.05,
+        "snap_count_percentage": 0.05,
+        "line_movement": 0.04
       },
       "caps": {
+        "player_tilt_leverage": [-1.5, 1.5],
+        "vegas_props": [-2.0, 2.0],
+        "win_probability_script": [-1.75, 1.75],
+        "backup_quality_adjustment": [-0.75, 0.75],
+        "red_zone_opportunity": [-1.25, 1.25],
+        "snap_count_percentage": [-1.0, 1.0],
+        "line_movement": [-1.25, 1.25],
         "total_adjustment": [-6.0, 6.0],
         "matchup_multiplier": [0.85, 1.15]
       },

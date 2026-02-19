@@ -72,6 +72,96 @@ class FeedContractsTest(TestCase):
         errors = validate_canonical_feed("nextgenstats", payload)
         self.assertEqual(errors, [])
 
+    def test_validate_optional_extended_contract_fields(self):
+        market_payload = build_empty_envelope()
+        market_payload["data"] = {
+            "projections": {},
+            "usage_trend": {},
+            "sentiment": {},
+            "future_schedule_strength": {},
+            "ownership_by_player": {"101": 0.22},
+        }
+        self.assertEqual(validate_canonical_feed("market", market_payload), [])
+
+        odds_payload = build_empty_envelope()
+        odds_payload["data"] = {
+            "defense_vs_position": {},
+            "spread_by_team": {"1": -4.5},
+            "implied_total_by_team": {},
+            "schedule_strength_by_team": {},
+            "player_props_by_player": {"101": {"line_open": 74.5, "line_current": 78.5, "sharp_over_pct": 0.61}},
+            "win_probability_by_team": {"1": 0.64},
+            "live_game_state_by_team": {"1": {"quarter": 3, "time_remaining_sec": 420, "score_differential": 7}},
+            "opening_spread_by_team": {"1": -3.0},
+            "closing_spread_by_team": {"1": -4.5},
+        }
+        self.assertEqual(validate_canonical_feed("odds", odds_payload), [])
+
+        injury_payload = build_empty_envelope()
+        injury_payload["data"] = {
+            "injury_status": {},
+            "team_injuries_by_position": {},
+            "backup_projection_ratio_by_player": {"101": 0.52},
+        }
+        self.assertEqual(validate_canonical_feed("injury_news", injury_payload), [])
+
+        nextgen_payload = build_empty_envelope()
+        nextgen_payload["data"] = {
+            "player_metrics": {
+                "101": {
+                    "usage_over_expected": 1.1,
+                    "route_participation": 0.82,
+                    "avg_separation": 2.0,
+                    "explosive_play_rate": 0.31,
+                    "volatility_index": 5.6,
+                    "red_zone_touch_share": 0.21,
+                    "red_zone_touch_trend": 0.03,
+                    "snap_share": 0.78,
+                    "snap_share_trend": -0.02,
+                }
+            }
+        }
+        self.assertEqual(validate_canonical_feed("nextgenstats", nextgen_payload), [])
+
+    def test_validate_optional_extended_contract_fields_rejects_invalid_types(self):
+        market_payload = build_empty_envelope()
+        market_payload["data"] = {
+            "projections": {},
+            "usage_trend": {},
+            "sentiment": {},
+            "future_schedule_strength": {},
+            "ownership_by_player": {"101": 2.0},
+        }
+        self.assertTrue(any("ownership_by_player" in err for err in validate_canonical_feed("market", market_payload)))
+
+        odds_payload = build_empty_envelope()
+        odds_payload["data"] = {
+            "defense_vs_position": {},
+            "spread_by_team": {},
+            "implied_total_by_team": {},
+            "schedule_strength_by_team": {},
+            "player_props_by_player": {"101": {"line_open": 74.5, "line_current": 78.5, "sharp_over_pct": 2.0}},
+        }
+        self.assertTrue(any("sharp_over_pct" in err for err in validate_canonical_feed("odds", odds_payload)))
+
+        injury_payload = build_empty_envelope()
+        injury_payload["data"] = {
+            "injury_status": {},
+            "team_injuries_by_position": {},
+            "backup_projection_ratio_by_player": {"101": -0.1},
+        }
+        self.assertTrue(any("backup_projection_ratio_by_player" in err for err in validate_canonical_feed("injury_news", injury_payload)))
+
+        nextgen_payload = build_empty_envelope()
+        nextgen_payload["data"] = {
+            "player_metrics": {
+                "101": {
+                    "snap_share": 1.3,
+                }
+            }
+        }
+        self.assertTrue(any("snap_share" in err for err in validate_canonical_feed("nextgenstats", nextgen_payload)))
+
     def test_json_feed_client_wraps_raw_static_payload(self):
         config = ExternalFeedConfig(
             enabled=True,

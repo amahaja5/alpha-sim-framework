@@ -11,7 +11,11 @@
         "projections": { "type": "object" },
         "usage_trend": { "type": "object" },
         "sentiment": { "type": "object" },
-        "future_schedule_strength": { "type": "object" }
+        "future_schedule_strength": { "type": "object" },
+        "ownership_by_player": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        }
       },
       "additionalProperties": true
     },

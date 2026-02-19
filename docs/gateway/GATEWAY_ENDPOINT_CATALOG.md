@@ -47,6 +47,12 @@ All canonical feed responses use:
   - `GET https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds?apiKey={key}&regions=us&markets=h2h,spreads,totals`
 - The Odds API event odds
   - `GET https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/{eventId}/odds?apiKey={key}&regions=us&markets=spreads,totals`
+- Extended signal keys expected in canonical odds payload:
+  - `player_props_by_player[player_id] = {line_open, line_current, sharp_over_pct}`
+  - `win_probability_by_team[team_id]`
+  - `live_game_state_by_team[team_id] = {quarter, time_remaining_sec, score_differential}`
+  - `opening_spread_by_team[team_id]`
+  - `closing_spread_by_team[team_id]`
 
 ### Market Sentiment
 
@@ -56,6 +62,8 @@ All canonical feed responses use:
   - `GET https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours={h}&limit={n}`
 - Sleeper trending drops
   - `GET https://api.sleeper.app/v1/players/nfl/trending/drop?lookback_hours={h}&limit={n}`
+- Extended signal key expected in canonical market payload:
+  - `ownership_by_player[player_id]` (0-1 ownership estimate)
 
 ### Injury / News
 
@@ -64,6 +72,8 @@ All canonical feed responses use:
 - ESPN roster/player statuses through existing league object
 - FantasyPros injury news (upgrade)
   - `GET https://api.fantasypros.com/v2/{format}/nfl/news?category=injury`
+- Extended signal key expected in canonical injury payload:
+  - `backup_projection_ratio_by_player[player_id]` (0-1)
 
 ### Next Gen Stats (Usage / Efficiency / Volatility Enrichment)
 
@@ -71,6 +81,11 @@ All canonical feed responses use:
   - `GET /v1/feeds/nextgenstats?league_id=&year=&week=`
 - Paid upgrade option (advanced metrics provider)
   - Example: SportsDataIO advanced player metrics endpoints (licensed)
+- Extended signal keys expected in canonical nextgen payload:
+  - `player_metrics[player_id].red_zone_touch_share`
+  - `player_metrics[player_id].red_zone_touch_trend`
+  - `player_metrics[player_id].snap_share`
+  - `player_metrics[player_id].snap_share_trend`
 
 ## Probe Workflow
 

@@ -7,7 +7,7 @@ Standalone NFL decision/simulation framework that integrates with `espn_api` lea
 - `AdvancedFantasySimulator` for matchup, trade, and free-agent analysis
 - `MonteCarloSimulator` for season/playoff simulation plus alpha-mode workflows
 - Alpha utility modules (`alpha_model`, `alpha_snapshot`, `alpha_backtest`, `alpha_provider`, `alpha_types`)
-- Composite provider (`CompositeSignalProvider`) with 10-signal blend, feed adapters, and diagnostics
+- Composite provider (`CompositeSignalProvider`) with a 10-signal base blend plus optional extended high/medium signals behind `enable_extended_signals`
 - League context pipeline (`league_context`) for persistent ESPN history + derived behavior analytics
 - League adapter (`from_espn_league`) to convert live ESPN objects into a stable internal shape
 - CLI entrypoint: `fantasy-decision-maker`

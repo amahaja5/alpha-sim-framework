@@ -155,6 +155,13 @@ class SignalWeights:
     market_sentiment_contrarian: float = 0.07
     waiver_replacement_value: float = 0.06
     short_term_schedule_cluster: float = 0.07
+    player_tilt_leverage: float = 0.08
+    vegas_props: float = 0.10
+    win_probability_script: float = 0.07
+    backup_quality_adjustment: float = 0.04
+    red_zone_opportunity: float = 0.05
+    snap_count_percentage: float = 0.05
+    line_movement: float = 0.04
 
 
 @dataclass
@@ -169,6 +176,13 @@ class SignalCaps:
     market_sentiment_contrarian: Tuple[float, float] = (-1.0, 1.0)
     waiver_replacement_value: Tuple[float, float] = (-1.0, 2.0)
     short_term_schedule_cluster: Tuple[float, float] = (-1.5, 1.5)
+    player_tilt_leverage: Tuple[float, float] = (-1.5, 1.5)
+    vegas_props: Tuple[float, float] = (-2.0, 2.0)
+    win_probability_script: Tuple[float, float] = (-1.75, 1.75)
+    backup_quality_adjustment: Tuple[float, float] = (-0.75, 0.75)
+    red_zone_opportunity: Tuple[float, float] = (-1.25, 1.25)
+    snap_count_percentage: Tuple[float, float] = (-1.0, 1.0)
+    line_movement: Tuple[float, float] = (-1.25, 1.25)
     total_adjustment: Tuple[float, float] = (-6.0, 6.0)
     matchup_signal_multiplier: Tuple[float, float] = (0.92, 1.10)
     matchup_multiplier: Tuple[float, float] = (0.85, 1.15)
@@ -206,3 +220,4 @@ class CompositeAlphaConfig:
     usage_scale: float = 0.25
     schedule_horizon_weeks: int = 4
     min_recent_points: int = 2
+    enable_extended_signals: bool = False

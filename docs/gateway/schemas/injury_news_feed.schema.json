@@ -9,7 +9,11 @@
       "required": ["injury_status", "team_injuries_by_position"],
       "properties": {
         "injury_status": { "type": "object" },
-        "team_injuries_by_position": { "type": "object" }
+        "team_injuries_by_position": { "type": "object" },
+        "backup_projection_ratio_by_player": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        }
       },
       "additionalProperties": true
     },

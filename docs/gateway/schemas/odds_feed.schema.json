@@ -11,7 +11,39 @@
         "defense_vs_position": { "type": "object" },
         "spread_by_team": { "type": "object" },
         "implied_total_by_team": { "type": "object" },
-        "schedule_strength_by_team": { "type": "object" }
+        "schedule_strength_by_team": { "type": "object" },
+        "player_props_by_player": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["line_open", "line_current", "sharp_over_pct"],
+            "properties": {
+              "line_open": { "type": "number" },
+              "line_current": { "type": "number" },
+              "sharp_over_pct": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+            },
+            "additionalProperties": true
+          }
+        },
+        "win_probability_by_team": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        },
+        "live_game_state_by_team": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["quarter", "time_remaining_sec", "score_differential"],
+            "properties": {
+              "quarter": { "type": "integer", "minimum": 1, "maximum": 5 },
+              "time_remaining_sec": { "type": "number" },
+              "score_differential": { "type": "number" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "opening_spread_by_team": { "type": "object" },
+        "closing_spread_by_team": { "type": "object" }
       },
       "additionalProperties": true
     },

@@ -31,13 +31,15 @@ Primary capabilities:
   - `recommend_lineup(..., explain=True)`
 - External signal providers are supported through `alpha_provider` wrappers for safe fallback behavior.
 - Built-in `CompositeSignalProvider` supports:
-  - 10 signal families (projection residual, usage trend, injury opportunity, matchup unit, game script, volatility, weather, sentiment, waiver value, schedule cluster)
+  - 10 base signal families (projection residual, usage trend, injury opportunity, matchup unit, game script, volatility, weather, sentiment, waiver value, schedule cluster)
+  - optional extended signal families (player tilt, vegas props, win-probability script, backup quality, red-zone opportunity, snap count %, line movement)
   - static weighted blending
   - strict clipping/cap controls
   - graceful external-feed fallback
   - canonical feed-contract validation with warn/degrade defaults
   - per-player diagnostics (`last_diagnostics`) and warnings (`last_warnings`)
-  - optional `nextgenstats` feed for usage/efficiency/volatility enrichment
+  - optional `nextgenstats` feed for usage/efficiency/volatility enrichment plus red-zone/snap metrics
+  - feature-flagged rollout (`enable_extended_signals=False` by default)
 
 ## Persistent League Context
 

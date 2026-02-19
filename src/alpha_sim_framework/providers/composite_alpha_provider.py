@@ -25,6 +25,27 @@ from .feeds import (
 
 HEALTHY_STATUSES = {"NONE", "ACTIVE", ""}
 OUTLIKE_STATUSES = {"OUT", "DOUBTFUL", "IR", "SUSPENSION"}
+BASE_SIGNAL_NAMES = (
+    "projection_residual",
+    "usage_trend",
+    "injury_opportunity",
+    "matchup_unit",
+    "game_script",
+    "volatility_aware",
+    "weather_venue",
+    "market_sentiment_contrarian",
+    "waiver_replacement_value",
+    "short_term_schedule_cluster",
+)
+EXTENDED_SIGNAL_NAMES = (
+    "player_tilt_leverage",
+    "vegas_props",
+    "win_probability_script",
+    "backup_quality_adjustment",
+    "red_zone_opportunity",
+    "snap_count_percentage",
+    "line_movement",
+)
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -342,9 +363,16 @@ class CompositeSignalProvider:
     def _build_week_payload(self, league: Any, week: int) -> Dict[str, Any]:
         teams = list(getattr(league, "teams", []) or [])
         reg_games = max(1, int(getattr(getattr(league, "settings", None), "reg_season_count", 14) or 14))
+        use_extended_signals = bool(getattr(self.config, "enable_extended_signals", False))
+        active_signal_names = list(BASE_SIGNAL_NAMES)
+        if use_extended_signals:
+            active_signal_names.extend(EXTENDED_SIGNAL_NAMES)
 
         weights = asdict(self.config.weights)
-        positive_weights = {name: max(0.0, _safe_float(value, 0.0)) for name, value in weights.items()}
+        positive_weights = {
+            name: max(0.0, _safe_float(weights.get(name, 0.0), 0.0))
+            for name in active_signal_names
+        }
         weight_sum = sum(positive_weights.values())
         if weight_sum <= 0:
             equal = 1.0 / max(1, len(positive_weights))
@@ -365,6 +393,18 @@ class CompositeSignalProvider:
             "waiver_replacement_value": caps.waiver_replacement_value,
             "short_term_schedule_cluster": caps.short_term_schedule_cluster,
         }
+        if use_extended_signals:
+            cap_map.update(
+                {
+                    "player_tilt_leverage": caps.player_tilt_leverage,
+                    "vegas_props": caps.vegas_props,
+                    "win_probability_script": caps.win_probability_script,
+                    "backup_quality_adjustment": caps.backup_quality_adjustment,
+                    "red_zone_opportunity": caps.red_zone_opportunity,
+                    "snap_count_percentage": caps.snap_count_percentage,
+                    "line_movement": caps.line_movement,
+                }
+            )
 
         feeds, feed_warnings = self._fetch_all_feeds(league, week)
         weather_data = _as_dict(_as_dict(feeds.get("weather", {})).get("data", {}))
@@ -377,15 +417,22 @@ class CompositeSignalProvider:
         usage_trend_map = _as_dict(market_data.get("usage_trend", {}))
         sentiment_map = _as_dict(market_data.get("sentiment", {}))
         market_schedule = _as_dict(market_data.get("future_schedule_strength", {}))
+        ownership_by_player = _as_dict(market_data.get("ownership_by_player", {}))
 
         defense_vs_position = _as_dict(odds_data.get("defense_vs_position", {}))
         spread_by_team = _as_dict(odds_data.get("spread_by_team", {}))
         implied_total_by_team = _as_dict(odds_data.get("implied_total_by_team", {}))
         odds_schedule = _as_dict(odds_data.get("schedule_strength_by_team", {}))
+        player_props_by_player = _as_dict(odds_data.get("player_props_by_player", {}))
+        win_probability_by_team = _as_dict(odds_data.get("win_probability_by_team", {}))
+        live_game_state_by_team = _as_dict(odds_data.get("live_game_state_by_team", {}))
+        opening_spread_by_team = _as_dict(odds_data.get("opening_spread_by_team", {}))
+        closing_spread_by_team = _as_dict(odds_data.get("closing_spread_by_team", {}))
 
         team_weather = _as_dict(weather_data.get("team_weather", {}))
         injury_status_map = _as_dict(injury_data.get("injury_status", {}))
         team_injuries_by_position = _as_dict(injury_data.get("team_injuries_by_position", {}))
+        backup_projection_ratio_by_player = _as_dict(injury_data.get("backup_projection_ratio_by_player", {}))
         nextgen_player_metrics = _as_dict(nextgen_data.get("player_metrics", {}))
 
         team_map = {_team_id(team): team for team in teams if _team_id(team) is not None}
@@ -401,6 +448,8 @@ class CompositeSignalProvider:
         team_starters: Dict[int, Dict[str, float]] = {}
         roster_status: Dict[Any, str] = {}
         injury_overrides: Dict[Any, str] = {}
+        player_ownership: Dict[Any, float] = {}
+        ownership_by_position: Dict[str, List[float]] = {}
 
         for team_id, roster in players_by_team.items():
             starter_map: Dict[str, float] = {}
@@ -420,6 +469,14 @@ class CompositeSignalProvider:
                 if status not in HEALTHY_STATUSES:
                     injury_overrides[pid] = status
 
+                ownership_value = _lookup(ownership_by_player, pid)
+                if ownership_value is None:
+                    ownership_value = _safe_float(getattr(player, "percent_started", 50.0), 50.0) / 100.0
+                ownership_value = float(np.clip(_safe_float(ownership_value, 0.5), 0.0, 1.0))
+                player_ownership[pid] = ownership_value
+                if pos:
+                    ownership_by_position.setdefault(pos, []).append(ownership_value)
+
             team_starters[team_id] = starter_map
 
         replacement_by_position = {}
@@ -428,6 +485,10 @@ class CompositeSignalProvider:
                 replacement_by_position[pos] = 0.0
             else:
                 replacement_by_position[pos] = float(np.percentile(np.array(values, dtype=float), 35))
+
+        mean_ownership_by_position: Dict[str, float] = {}
+        for pos, values in ownership_by_position.items():
+            mean_ownership_by_position[pos] = float(np.mean(values)) if values else 0.5
 
         injured_counts: Dict[int, Dict[str, int]] = {}
         for team_id, roster in players_by_team.items():
@@ -592,6 +653,109 @@ class CompositeSignalProvider:
                     "waiver_replacement_value": waiver_replacement_value,
                     "short_term_schedule_cluster": short_term_schedule_cluster,
                 }
+                if use_extended_signals:
+                    ownership_value = player_ownership.get(pid, 0.5)
+                    position_ownership_baseline = mean_ownership_by_position.get(pos, ownership_value)
+                    ownership_delta = position_ownership_baseline - ownership_value
+                    residual_denom = max(2.0, baseline * 0.35)
+                    residual_z_score = float(np.clip(residual / residual_denom, -2.5, 2.5))
+                    player_tilt_leverage = 2.0 * ownership_delta * residual_z_score
+
+                    props = _as_dict(_lookup(player_props_by_player, pid, {}))
+                    vegas_props = 0.0
+                    if props:
+                        line_open = _safe_float(props.get("line_open", baseline), baseline)
+                        line_current = _safe_float(props.get("line_current", line_open), line_open)
+                        sharp_over_pct = float(np.clip(_safe_float(props.get("sharp_over_pct", 0.5), 0.5), 0.0, 1.0))
+                        line_edge = (line_current - baseline) / max(5.0, abs(baseline))
+                        line_move = (line_current - line_open) / max(3.0, abs(line_open))
+                        vegas_props = (3.0 * line_edge) + (1.8 * line_move) + (1.5 * (sharp_over_pct - 0.5))
+
+                    game_state = _as_dict(_lookup(live_game_state_by_team, team_id, {}))
+                    quarter = int(_safe_float(game_state.get("quarter", 0), 0.0))
+                    time_remaining_sec = _safe_float(game_state.get("time_remaining_sec", 900.0), 900.0)
+                    score_differential = _safe_float(game_state.get("score_differential", 0.0), 0.0)
+                    win_prob_input = _lookup(win_probability_by_team, team_id)
+                    has_live_context = quarter > 0
+                    win_probability_script = 0.0
+                    if win_prob_input is not None or has_live_context:
+                        if win_prob_input is None:
+                            team_win_prob = 0.5
+                        else:
+                            team_win_prob = float(np.clip(_safe_float(win_prob_input, 0.5), 0.0, 1.0))
+                        live_weight = float(np.clip((quarter - 1) / 3.0, 0.0, 1.0))
+                        if quarter >= 4:
+                            late_clock_weight = 1.0 - float(np.clip(time_remaining_sec, 0.0, 900.0)) / 900.0
+                            live_weight = float(np.clip(live_weight + (0.5 * late_clock_weight), 0.0, 1.0))
+                        score_pressure = float(np.clip(score_differential / 14.0, -1.5, 1.5))
+                        wp_position_weight = {
+                            "QB": -1.0,
+                            "WR": -0.85,
+                            "TE": -0.60,
+                            "RB": 0.95,
+                            "K": 0.20,
+                            "D/ST": 0.25,
+                        }.get(pos, 0.0)
+                        win_probability_script = (
+                            1.8 * (team_win_prob - 0.5) * wp_position_weight
+                        ) + (
+                            0.7 * live_weight * score_pressure * wp_position_weight
+                        )
+
+                    backup_ratio = _safe_float(_lookup(backup_projection_ratio_by_player, pid, -1.0), -1.0)
+                    backup_quality_adjustment = 0.0
+                    if backup_ratio >= 0.0:
+                        backup_weight = {
+                            "QB": 1.0,
+                            "RB": 0.4,
+                            "WR": 0.2,
+                            "TE": 0.3,
+                            "K": 0.1,
+                            "D/ST": 0.15,
+                        }.get(pos, 0.0)
+                        if backup_ratio < 0.40:
+                            backup_quality_adjustment = 0.15 * backup_weight
+                        elif backup_ratio > 0.80:
+                            backup_quality_adjustment = -0.10 * backup_weight
+
+                    red_zone_touch_share = float(np.clip(_safe_float(nextgen_metrics.get("red_zone_touch_share", 0.0), 0.0), 0.0, 1.0))
+                    red_zone_touch_trend = float(np.clip(_safe_float(nextgen_metrics.get("red_zone_touch_trend", 0.0), 0.0), -1.0, 1.0))
+                    red_zone_opportunity = (0.20 * red_zone_touch_share) + (0.30 * red_zone_touch_trend)
+
+                    snap_count_percentage = 0.0
+                    if "snap_share" in nextgen_metrics or "snap_share_trend" in nextgen_metrics:
+                        snap_share = float(np.clip(_safe_float(nextgen_metrics.get("snap_share", 0.0), 0.0), 0.0, 1.0))
+                        snap_share_trend = float(np.clip(_safe_float(nextgen_metrics.get("snap_share_trend", 0.0), 0.0), -1.0, 1.0))
+                        snap_share_level = float(np.clip((snap_share - 0.50) / 0.30, -1.0, 1.0))
+                        snap_trend_level = float(np.clip(snap_share_trend / 0.10, -1.0, 1.0))
+                        snap_count_percentage = (0.20 * snap_share_level) + (0.30 * snap_trend_level)
+
+                    opening_spread = _safe_float(_lookup(opening_spread_by_team, team_id, spread), spread)
+                    closing_spread = _safe_float(_lookup(closing_spread_by_team, team_id, spread), spread)
+                    spread_move = closing_spread - opening_spread
+                    spread_move_magnitude = float(np.clip(abs(spread_move), 0.0, 4.0))
+                    spread_move_direction = 1.0 if spread_move < 0 else -1.0
+                    line_move_weight = {
+                        "QB": 0.15,
+                        "RB": 0.20,
+                        "WR": 0.15,
+                        "TE": 0.10,
+                        "K": 0.05,
+                        "D/ST": 0.12,
+                    }.get(pos, 0.08)
+                    line_movement = line_move_weight * spread_move_direction * spread_move_magnitude
+
+                    raw_signals.update(
+                        {
+                            "player_tilt_leverage": player_tilt_leverage,
+                            "vegas_props": vegas_props,
+                            "win_probability_script": win_probability_script,
+                            "backup_quality_adjustment": backup_quality_adjustment,
+                            "red_zone_opportunity": red_zone_opportunity,
+                            "snap_count_percentage": snap_count_percentage,
+                            "line_movement": line_movement,
+                        }
+                    )
 
                 clipped_signals = {
                     name: _cap(value, cap_map[name])
@@ -626,6 +790,7 @@ class CompositeSignalProvider:
                     "final_adjustment": final_adjustment,
                     "matchup_multiplier": matchup_multiplier,
                     "injury_status": status,
+                    "extended_signals_enabled": use_extended_signals,
                 }
 
         quality_flags = set()
@@ -647,6 +812,8 @@ class CompositeSignalProvider:
                 if value <= caps.total_adjustment[0] + 1e-9 or value >= caps.total_adjustment[1] - 1e-9
             ),
             "quality_flags": sorted(quality_flags),
+            "active_signals": list(active_signal_names),
+            "extended_signals_enabled": use_extended_signals,
         }
 
         return {

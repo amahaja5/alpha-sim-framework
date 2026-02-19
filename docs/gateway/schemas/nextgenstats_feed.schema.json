@@ -17,7 +17,11 @@
               "route_participation": { "type": "number" },
               "avg_separation": { "type": "number" },
               "explosive_play_rate": { "type": "number" },
-              "volatility_index": { "type": "number" }
+              "volatility_index": { "type": "number" },
+              "red_zone_touch_share": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+              "red_zone_touch_trend": { "type": "number" },
+              "snap_share": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+              "snap_share_trend": { "type": "number" }
             },
             "additionalProperties": true
           }
