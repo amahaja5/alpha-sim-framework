@@ -1,2 +1,0 @@
-[console_scripts]
-fantasy-decision-maker = alpha_sim_framework.fantasy_decision_maker:main
