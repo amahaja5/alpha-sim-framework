@@ -1,0 +1,75 @@
+{
+  "league": {
+    "league_id": 123456,
+    "team_id": 1,
+    "year": 2025,
+    "swid": null,
+    "espn_s2": null
+  },
+  "profile": "default",
+  "simulation": {
+    "simulations": 5000,
+    "seeds": 7,
+    "alpha_config": {
+      "alpha_blend": 0.35,
+      "candidate_pool_size": 30
+    }
+  },
+  "evaluation": {
+    "weeks": "auto",
+    "use_context": false,
+    "lookback_seasons": 3,
+    "include_playoffs": false
+  },
+  "gate": {
+    "min_weekly_points_lift": 0.0,
+    "max_downside_probability": 0.4,
+    "min_successful_seeds": 3
+  },
+  "alpha_provider": {
+    "class_path": "alpha_sim_framework.providers:CompositeSignalProvider",
+    "kwargs": {
+      "weights": {
+        "projection_residual": 0.2,
+        "usage_trend": 0.12,
+        "injury_opportunity": 0.14,
+        "matchup_unit": 0.1,
+        "game_script": 0.09,
+        "volatility_aware": 0.08,
+        "weather_venue": 0.07,
+        "market_sentiment_contrarian": 0.07,
+        "waiver_replacement_value": 0.06,
+        "short_term_schedule_cluster": 0.07
+      },
+      "caps": {
+        "total_adjustment": [-6.0, 6.0],
+        "matchup_multiplier": [0.85, 1.15]
+      },
+      "runtime": {
+        "timeout_seconds": 2.0,
+        "retries": 1,
+        "cache_ttl_seconds": 300,
+        "degrade_gracefully": true
+      },
+      "external_feeds": {
+        "enabled": true,
+        "endpoints": {
+          "weather": "https://example.com/weather",
+          "market": "https://example.com/market",
+          "odds": "https://example.com/odds",
+          "injury_news": "https://example.com/injury"
+        },
+        "api_keys": {
+          "weather": "${WEATHER_API_KEY}",
+          "market": "${MARKET_API_KEY}",
+          "odds": "${ODDS_API_KEY}",
+          "injury_news": "${INJURY_API_KEY}"
+        },
+        "static_payloads": {}
+      }
+    }
+  },
+  "output": {
+    "output_dir": "reports/ab_runs"
+  }
+}

@@ -13,15 +13,17 @@ For private leagues, you'll need to provide ESPN cookies:
 """
 
 import argparse
+import importlib
 import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import pandas as pd
 from espn_api.football import League
 from .advanced_simulator import AdvancedFantasySimulator
+from .ab_evaluation import run_ab_evaluation, resolve_ab_config
 from .league_context import build_league_context
 from .monte_carlo import MonteCarloSimulator
 
@@ -498,6 +500,29 @@ def load_config(config_path: str) -> dict:
         return json.load(f)
 
 
+def load_alpha_provider(class_path: str, kwargs: Optional[Dict[str, Any]] = None) -> Any:
+    spec = str(class_path or "").strip()
+    if not spec:
+        raise ValueError("Provider class path is required")
+
+    if ":" in spec:
+        module_name, class_name = spec.split(":", 1)
+    elif "." in spec:
+        module_name, class_name = spec.rsplit(".", 1)
+    else:
+        raise ValueError("Provider class path must be 'module:Class' or 'module.Class'")
+
+    module = importlib.import_module(module_name)
+    provider_cls = getattr(module, class_name, None)
+    if provider_cls is None:
+        raise ValueError(f"Provider class '{class_name}' not found in module '{module_name}'")
+
+    init_kwargs = dict(kwargs or {})
+    if not isinstance(init_kwargs, dict):
+        raise ValueError("Provider kwargs must be a JSON object/dict")
+    return provider_cls(**init_kwargs)
+
+
 def build_context_from_cli(
     *,
     league_id: int,
@@ -550,6 +575,87 @@ def build_context_from_cli(
     return result
 
 
+def run_ab_eval_from_cli(
+    *,
+    league_id: int,
+    team_id: int,
+    year: int,
+    swid: Optional[str],
+    espn_s2: Optional[str],
+    context_dir: str,
+    ab_base_config: Optional[dict],
+    ab_profile: str,
+    ab_output_dir: str,
+    ab_seeds: Optional[int],
+    ab_simulations: Optional[int],
+    ab_weeks: Optional[str],
+    ab_use_context: bool,
+    ab_provider_class: Optional[str],
+    ab_provider_kwargs: Optional[Dict[str, Any]],
+) -> dict:
+    print("=" * 80)
+    print("🧪 RUNNING ALPHA A/B EVALUATION")
+    print("=" * 80)
+
+    provider_cfg = {}
+    if isinstance(ab_base_config, dict):
+        provider_cfg = dict(ab_base_config.get("alpha_provider", {}) or {})
+
+    provider_class = ab_provider_class or provider_cfg.get("class_path")
+    provider_kwargs = ab_provider_kwargs if ab_provider_kwargs is not None else provider_cfg.get("kwargs", {})
+    provider = None
+    if provider_class:
+        provider = load_alpha_provider(provider_class, provider_kwargs)
+        print(f"🧠 Loaded alpha provider: {provider_class}")
+
+    config = resolve_ab_config(
+        ab_base_config,
+        {
+            "league_id": league_id,
+            "team_id": team_id,
+            "year": year,
+            "swid": swid,
+            "espn_s2": espn_s2,
+            "profile": ab_profile,
+            "output_dir": ab_output_dir,
+            "seeds": ab_seeds,
+            "simulations": ab_simulations,
+            "weeks": ab_weeks,
+            "use_context": ab_use_context,
+            "context_path": str(Path(context_dir) / str(league_id)) if ab_use_context else None,
+            "alpha_provider": {
+                "class_path": provider_class,
+                "kwargs": provider_kwargs,
+            } if provider_class else None,
+        },
+    )
+
+    result = run_ab_evaluation(config=config, provider=provider)
+    summary = result.get("metrics_summary", {}).get("weekly_points_lift", {})
+    decision = result.get("decision", {})
+
+    print(f"\nRun ID:            {result.get('run_id')}")
+    print(f"Output Directory:  {result.get('output_dir')}")
+    print(f"Gate Decision:     {decision.get('status', 'inconclusive')}")
+    print(f"Mean Lift:         {summary.get('mean', 0.0):.4f}")
+    print(f"P05/P95:           ({summary.get('p05', 0.0):.4f}, {summary.get('p95', 0.0):.4f})")
+    print(f"Downside Prob:     {summary.get('downside_probability', 1.0):.4f}")
+
+    reasons = decision.get("reasons", [])
+    if reasons:
+        print("\nDecision Rationale:")
+        for reason in reasons:
+            print(f"  - {reason}")
+
+    warnings = result.get("warnings", [])
+    if warnings:
+        print("\nWarnings:")
+        for warning in warnings[:20]:
+            print(f"  - {warning}")
+    print()
+    return result
+
+
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(
@@ -578,6 +684,9 @@ Examples:
 
   # Build persistent league context
   uv run fantasy-decision-maker --config config.json --build-context --context-lookback-seasons 3
+
+  # Full A/B alpha evaluation
+  uv run fantasy-decision-maker --config config.json --ab-eval --ab-profile default
 
 Getting ESPN Cookies for Private Leagues:
   1. Log into ESPN Fantasy Football in your browser
@@ -636,8 +745,51 @@ Getting ESPN Cookies for Private Leagues:
                         help='Use local context store for historical backtest when available')
     parser.add_argument('--context-output-summary-json', type=str, default=None,
                         help='Optional JSON path for context build summary')
+    parser.add_argument('--ab-eval', action='store_true',
+                        help='Run controlled baseline vs alpha A/B evaluation and exit')
+    parser.add_argument('--ab-config', type=str, default=None,
+                        help='Optional path to A/B evaluation JSON config')
+    parser.add_argument('--ab-output-dir', type=str, default='reports/ab_runs',
+                        help='A/B run output root (default: reports/ab_runs)')
+    parser.add_argument('--ab-profile', choices=['quick', 'default', 'deep'], default='default',
+                        help='A/B runtime profile')
+    parser.add_argument('--ab-seeds', type=int, default=None,
+                        help='Override number of seeds for A/B run')
+    parser.add_argument('--ab-simulations', type=int, default=None,
+                        help='Override simulations per seed for A/B run')
+    parser.add_argument('--ab-weeks', type=str, default='auto',
+                        help='Week scope: auto, comma list (1,2,3), or range (3-8)')
+    parser.add_argument('--ab-use-context', action='store_true',
+                        help='Prefer local context path for A/B quality diagnostics')
+    parser.add_argument('--ab-provider-class', type=str, default=None,
+                        help="Alpha provider class path, e.g. 'my_pkg.my_provider:MyProvider'")
+    parser.add_argument('--ab-provider-kwargs', type=str, default=None,
+                        help='JSON object for alpha provider constructor kwargs')
 
     args = parser.parse_args()
+    ab_config = {}
+
+    if args.ab_config:
+        if not os.path.exists(args.ab_config):
+            print(f"❌ Error: A/B config file not found: {args.ab_config}")
+            return 1
+
+    ab_provider_kwargs = None
+    if args.ab_provider_kwargs:
+        try:
+            ab_provider_kwargs = json.loads(args.ab_provider_kwargs)
+        except json.JSONDecodeError as e:
+            print(f"❌ Error: Invalid JSON in --ab-provider-kwargs: {e}")
+            return 1
+        try:
+            ab_config = load_config(args.ab_config)
+            print(f"📄 Loaded A/B config from: {args.ab_config}")
+        except json.JSONDecodeError as e:
+            print(f"❌ Error: Invalid JSON in A/B config file: {e}")
+            return 1
+        except Exception as e:
+            print(f"❌ Error loading A/B config: {e}")
+            return 1
 
     # Load from config file if provided
     if args.config:
@@ -681,6 +833,14 @@ Getting ESPN Cookies for Private Leagues:
         cache_dir = args.cache_dir or '.cache'
         alpha_mode = args.alpha_mode
 
+    if args.ab_eval:
+        ab_league = ab_config.get("league", {})
+        league_id = league_id or ab_config.get("league_id") or ab_league.get("league_id")
+        team_id = team_id or ab_config.get("team_id") or ab_league.get("team_id")
+        year = year or ab_config.get("year") or ab_league.get("year", datetime.now().year)
+        swid = swid or ab_config.get("swid") or ab_league.get("swid")
+        espn_s2 = espn_s2 or ab_config.get("espn_s2") or ab_league.get("espn_s2")
+
     # Validate required parameters
     if league_id is None:
         print("❌ Error: --league-id is required (or specify --config)")
@@ -702,6 +862,32 @@ Getting ESPN Cookies for Private Leagues:
                 end_year=args.context_end_year,
                 full_refresh=args.context_full_refresh,
                 output_summary_json=args.context_output_summary_json,
+            )
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return 1
+        return 0
+
+    if args.ab_eval:
+        try:
+            run_ab_eval_from_cli(
+                league_id=league_id,
+                team_id=team_id,
+                year=year,
+                swid=swid,
+                espn_s2=espn_s2,
+                context_dir=args.context_dir,
+                ab_base_config=ab_config,
+                ab_profile=args.ab_profile,
+                ab_output_dir=args.ab_output_dir,
+                ab_seeds=args.ab_seeds,
+                ab_simulations=args.ab_simulations,
+                ab_weeks=args.ab_weeks,
+                ab_use_context=args.ab_use_context,
+                ab_provider_class=args.ab_provider_class,
+                ab_provider_kwargs=ab_provider_kwargs,
             )
         except Exception as e:
             print(f"\n❌ Error: {e}")

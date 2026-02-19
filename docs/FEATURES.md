@@ -30,6 +30,12 @@ Primary capabilities:
   - `get_optimal_moves(..., explain=True)`
   - `recommend_lineup(..., explain=True)`
 - External signal providers are supported through `alpha_provider` wrappers for safe fallback behavior.
+- Built-in `CompositeSignalProvider` supports:
+  - 10 signal families (projection residual, usage trend, injury opportunity, matchup unit, game script, volatility, weather, sentiment, waiver value, schedule cluster)
+  - static weighted blending
+  - strict clipping/cap controls
+  - graceful external-feed fallback
+  - per-player diagnostics (`last_diagnostics`) and warnings (`last_warnings`)
 
 ## Persistent League Context
 

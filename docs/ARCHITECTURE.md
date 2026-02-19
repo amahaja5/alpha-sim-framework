@@ -16,6 +16,10 @@ Core package path: `src/alpha_sim_framework/`
   - backtest metric helpers (`run_backtest`)
 - `alpha_provider.py`
   - provider wrappers (`NullSignalProvider`, `SafeSignalProvider`)
+- `providers/composite_alpha_provider.py`
+  - composite multi-signal provider for external + league-driven alpha generation
+- `providers/feeds/*.py`
+  - feed adapters for weather, market, odds, and injury/news signals
 - `alpha_types.py`
   - `AlphaConfig`, `PlayerProjection`, provider protocol
 - `league_adapter.py`
