@@ -21,6 +21,7 @@ from typing import Optional
 import pandas as pd
 from espn_api.football import League
 from .advanced_simulator import AdvancedFantasySimulator
+from .monte_carlo import MonteCarloSimulator
 
 
 class FantasyDecisionMaker:
@@ -34,7 +35,8 @@ class FantasyDecisionMaker:
         swid: Optional[str] = None,
         espn_s2: Optional[str] = None,
         cache_dir: str = '.cache',
-        num_simulations: int = 10000
+        num_simulations: int = 10000,
+        alpha_mode: bool = False,
     ):
         """
         Initialize decision maker
@@ -47,12 +49,14 @@ class FantasyDecisionMaker:
             espn_s2: ESPN S2 cookie for private leagues
             cache_dir: Directory for caching
             num_simulations: Number of Monte Carlo simulations
+            alpha_mode: Enable alpha-layer season simulation output
         """
         self.league_id = league_id
         self.team_id = team_id
         self.year = year
         self.cache_dir = cache_dir
         self.num_simulations = num_simulations
+        self.alpha_mode = alpha_mode
 
         # Create cache directory
         os.makedirs(cache_dir, exist_ok=True)
@@ -84,6 +88,16 @@ class FantasyDecisionMaker:
             use_gmm=True
         )
         print("✅ Simulator ready!\n")
+
+        self.alpha_simulator = None
+        if self.alpha_mode:
+            print("🧠 Enabling alpha layer for season simulations...")
+            self.alpha_simulator = MonteCarloSimulator(
+                league=self.league,
+                num_simulations=num_simulations,
+                alpha_mode=True,
+            )
+            print("✅ Alpha simulator ready!\n")
 
     def analyze_current_matchup(self):
         """Analyze current week's matchup"""
@@ -270,16 +284,25 @@ class FantasyDecisionMaker:
         print("=" * 80)
 
         print(f"\n🎲 Simulating rest of season ({self.num_simulations:,} simulations)...")
-        results = self.simulator.simulate_season_rest_of_season()
+        if self.alpha_mode and self.alpha_simulator:
+            results = self.alpha_simulator.run_simulations(explain=True)
+            meta = results.pop("_meta", {})
+            print(
+                f"   Alpha mode: {meta.get('alpha_mode', False)} | "
+                f"Ratings source: {meta.get('ratings_source', 'unknown')}"
+            )
+        else:
+            results = self.simulator.simulate_season_rest_of_season()
 
         # Create standings DataFrame
         data = []
         for team in self.league.teams:
             team_results = results[team.team_id]
+            projected_wins = team_results['avg_wins'] if self.alpha_mode else team_results['projected_wins']
             data.append({
                 'Team': team.team_name[:25],
                 'Current': f"{team.wins}-{team.losses}",
-                'Proj Wins': f"{team_results['projected_wins']:.1f}",
+                'Proj Wins': f"{projected_wins:.1f}",
                 'Playoff %': f"{team_results['playoff_odds']:.1f}%",
                 'Ship %': f"{team_results['championship_odds']:.1f}%"
             })
@@ -297,7 +320,10 @@ class FantasyDecisionMaker:
         print(f"YOUR TEAM: {self.my_team.team_name}")
         print(f"{'─' * 80}")
         print(f"  Current Record:        {self.my_team.wins}-{self.my_team.losses}")
-        print(f"  Projected Final Wins:  {my_results['projected_wins']:.1f}")
+        if self.alpha_mode:
+            print(f"  Projected Final Wins:  {my_results['avg_wins']:.1f}")
+        else:
+            print(f"  Projected Final Wins:  {my_results['projected_wins']:.1f}")
         print(f"  Playoff Odds:          {my_results['playoff_odds']:.1f}%")
         print(f"  Championship Odds:     {my_results['championship_odds']:.1f}%")
         print()
@@ -410,6 +436,9 @@ Examples:
   # Quick report generation (non-interactive)
   uv run fantasy-decision-maker --league-id 123456 --team-id 1 --report-only
 
+  # Alpha-layer season simulation output
+  uv run fantasy-decision-maker --league-id 123456 --team-id 1 --alpha-mode --report-only
+
 Getting ESPN Cookies for Private Leagues:
   1. Log into ESPN Fantasy Football in your browser
   2. Open Developer Tools (F12)
@@ -437,6 +466,8 @@ Getting ESPN Cookies for Private Leagues:
                         help='Cache directory for player models (default: .cache)')
     parser.add_argument('--report-only', action='store_true',
                         help='Generate report and exit (non-interactive)')
+    parser.add_argument('--alpha-mode', action='store_true',
+                        help='Enable alpha-layer season simulation output')
 
     args = parser.parse_args()
 
@@ -461,6 +492,7 @@ Getting ESPN Cookies for Private Leagues:
             espn_s2 = args.espn_s2 or league_config.get('espn_s2')
             num_simulations = args.simulations or sim_config.get('num_simulations', 10000)
             cache_dir = args.cache_dir or sim_config.get('cache_dir', '.cache')
+            alpha_mode = args.alpha_mode or sim_config.get('alpha_mode', False)
 
             print(f"📄 Loaded config from: {args.config}")
 
@@ -479,6 +511,7 @@ Getting ESPN Cookies for Private Leagues:
         espn_s2 = args.espn_s2
         num_simulations = args.simulations or 10000
         cache_dir = args.cache_dir or '.cache'
+        alpha_mode = args.alpha_mode
 
     # Validate required parameters
     if league_id is None:
@@ -497,7 +530,8 @@ Getting ESPN Cookies for Private Leagues:
             swid=swid,
             espn_s2=espn_s2,
             cache_dir=cache_dir,
-            num_simulations=num_simulations
+            num_simulations=num_simulations,
+            alpha_mode=alpha_mode,
         )
 
         if args.report_only:
