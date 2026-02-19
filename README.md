@@ -20,8 +20,16 @@ uv sync
 
 ## Quick Run
 
+Default mode is interactive (menu-driven):
+
 ```bash
 uv run fantasy-decision-maker --league-id <LEAGUE_ID> --team-id <TEAM_ID> --year <YEAR>
+```
+
+Non-interactive report generation:
+
+```bash
+uv run fantasy-decision-maker --league-id <LEAGUE_ID> --team-id <TEAM_ID> --year <YEAR> --report-only
 ```
 
 ## Python Usage (Adapter + Simulator)
@@ -38,6 +46,8 @@ results = sim.run_simulations(explain=True)
 ```
 
 ## A/B With Composite Provider
+
+Fill in league/team/year values in `config.ab.template.json` first, then run:
 
 ```bash
 uv run fantasy-decision-maker \

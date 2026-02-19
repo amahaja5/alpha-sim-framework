@@ -250,6 +250,41 @@ class ABEvaluationTest(TestCase):
         self.assertEqual(rc, 0)
         runner.assert_called_once()
 
+    def test_cli_ab_eval_loads_ab_config_without_provider_kwargs(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "ab_config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "league": {
+                            "league_id": 987,
+                            "team_id": 3,
+                            "year": 2025,
+                        }
+                    }
+                )
+            )
+
+            with mock.patch(
+                "alpha_sim_framework.fantasy_decision_maker.run_ab_eval_from_cli",
+                return_value={"run_id": "ab_test"},
+            ) as runner:
+                argv = [
+                    "fantasy-decision-maker",
+                    "--ab-config",
+                    str(config_path),
+                    "--ab-eval",
+                ]
+                with mock.patch("sys.argv", argv):
+                    rc = main()
+
+            self.assertEqual(rc, 0)
+            runner.assert_called_once()
+            kwargs = runner.call_args.kwargs
+            self.assertEqual(kwargs["league_id"], 987)
+            self.assertEqual(kwargs["team_id"], 3)
+            self.assertEqual(kwargs["year"], 2025)
+
     def test_ab_eval_cli_wires_provider_kwargs(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             captured = {}

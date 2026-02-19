@@ -8,6 +8,7 @@
   },
   "simulation": {
     "num_simulations": 10000,
+    "alpha_mode": false,
     "use_gmm": true,
     "cache_dir": ".cache",
     "cache_ttl_hours": 24

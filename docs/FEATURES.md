@@ -35,6 +35,7 @@ Primary capabilities:
   - static weighted blending
   - strict clipping/cap controls
   - graceful external-feed fallback
+  - canonical feed-contract validation with warn/degrade defaults
   - per-player diagnostics (`last_diagnostics`) and warnings (`last_warnings`)
   - optional `nextgenstats` feed for usage/efficiency/volatility enrichment
 
@@ -51,6 +52,7 @@ Primary capabilities:
 - Endpoint discovery docs and scorecard templates live under `docs/gateway/`.
 - `gateway-probe` CLI (`src/alpha_sim_framework/gateway_probe.py`) can probe candidate endpoints and rank primary/backup choices by reliability + schema conformity.
 - Feed contract validation utilities (`src/alpha_sim_framework/feed_contracts.py`) provide canonical schema checks for weather/market/odds/injury domains.
+- This repository does not host a gateway HTTP service; the runtime path is provider-client ingestion with contract enforcement and graceful degradation.
 
 ## League Adapter Usage
 

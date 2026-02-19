@@ -190,6 +190,10 @@ class ProviderRuntimeConfig:
     backoff_seconds: float = 0.2
     cache_ttl_seconds: int = 300
     degrade_gracefully: bool = True
+    canonical_contract_mode: str = "warn"
+    canonical_contract_domains: List[str] = field(
+        default_factory=lambda: ["weather", "market", "odds", "injury_news", "nextgenstats"]
+    )
 
 
 @dataclass

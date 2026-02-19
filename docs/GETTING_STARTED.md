@@ -17,8 +17,16 @@ uv sync
 
 ## Minimal CLI Run
 
+This starts the interactive menu session:
+
 ```bash
 uv run fantasy-decision-maker --league-id <LEAGUE_ID> --team-id <TEAM_ID> --year <YEAR>
+```
+
+For a first non-interactive success path, generate a report:
+
+```bash
+uv run fantasy-decision-maker --league-id <LEAGUE_ID> --team-id <TEAM_ID> --year <YEAR> --report-only
 ```
 
 ## Config File Workflow
@@ -83,6 +91,29 @@ uv run fantasy-decision-maker \
   --team-id <TEAM_ID> \
   --swid "{YOUR-SWID}" \
   --espn-s2 "YOUR-ESPN-S2"
+```
+
+## A/B Evaluation
+
+1. Copy and edit the template with real league/team/year values:
+
+```bash
+cp config.ab.template.json config.ab.json
+```
+
+2. Run A/B evaluation from config:
+
+```bash
+uv run fantasy-decision-maker --ab-config config.ab.json --ab-eval
+```
+
+Optional provider override:
+
+```bash
+uv run fantasy-decision-maker \
+  --ab-config config.ab.json \
+  --ab-eval \
+  --ab-provider-class alpha_sim_framework.providers:CompositeSignalProvider
 ```
 
 ## External API Object Reference

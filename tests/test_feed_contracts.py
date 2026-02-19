@@ -1,6 +1,10 @@
-from unittest import TestCase
+import os
+from types import SimpleNamespace
+from unittest import TestCase, mock
 
+from alpha_sim_framework.alpha_types import ExternalFeedConfig, ProviderRuntimeConfig
 from alpha_sim_framework.feed_contracts import build_empty_envelope, validate_canonical_feed, validate_feed_envelope
+from alpha_sim_framework.providers.feeds.common import JSONFeedClient
 
 
 class FeedContractsTest(TestCase):
@@ -67,3 +71,71 @@ class FeedContractsTest(TestCase):
         }
         errors = validate_canonical_feed("nextgenstats", payload)
         self.assertEqual(errors, [])
+
+    def test_json_feed_client_wraps_raw_static_payload(self):
+        config = ExternalFeedConfig(
+            enabled=True,
+            static_payloads={
+                "weather": {
+                    "team_weather": {
+                        "1": {
+                            "is_dome": False,
+                            "wind_mph": 10.0,
+                            "precip_prob": 0.2,
+                        }
+                    }
+                }
+            },
+        )
+        runtime = ProviderRuntimeConfig()
+        client = JSONFeedClient("weather", config, runtime)
+
+        payload = client.fetch(SimpleNamespace(league_id=1, year=2025), week=3)
+
+        self.assertIn("raw_payload_wrapped", payload["quality_flags"])
+        self.assertIn("static_payload", payload["quality_flags"])
+        self.assertIn("team_weather", payload["data"])
+
+    def test_json_feed_client_expands_env_placeholders_for_endpoint_and_api_key(self):
+        config = ExternalFeedConfig(
+            enabled=True,
+            endpoints={"weather": "${TEST_WEATHER_ENDPOINT}"},
+            api_keys={"weather": "${TEST_WEATHER_KEY}"},
+        )
+        runtime = ProviderRuntimeConfig()
+        client = JSONFeedClient("weather", config, runtime)
+
+        class _Resp:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return b'{"team_weather":{"1":{"is_dome":true,"wind_mph":0.0,"precip_prob":0.0}}}'
+
+        seen = {}
+
+        def _fake_urlopen(request, timeout=0):
+            seen["url"] = request.full_url
+            seen["auth"] = request.get_header("Authorization")
+            return _Resp()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "TEST_WEATHER_ENDPOINT": "https://example.com/weather",
+                "TEST_WEATHER_KEY": "secret-key",
+            },
+            clear=False,
+        ):
+            with mock.patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+                payload = client.fetch(SimpleNamespace(league_id=12, year=2025), week=7)
+
+        self.assertEqual(seen["url"], "https://example.com/weather?league_id=12&year=2025&week=7")
+        self.assertEqual(seen["auth"], "Bearer secret-key")
+        self.assertIn("live_fetch", payload["quality_flags"])
+        self.assertIn("raw_payload_wrapped", payload["quality_flags"])

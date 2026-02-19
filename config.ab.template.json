@@ -49,16 +49,18 @@
         "timeout_seconds": 2.0,
         "retries": 1,
         "cache_ttl_seconds": 300,
-        "degrade_gracefully": true
+        "degrade_gracefully": true,
+        "canonical_contract_mode": "warn",
+        "canonical_contract_domains": ["weather", "market", "odds", "injury_news", "nextgenstats"]
       },
       "external_feeds": {
         "enabled": true,
         "endpoints": {
-          "weather": "https://example.com/weather",
-          "market": "https://example.com/market",
-          "odds": "https://example.com/odds",
-          "injury_news": "https://example.com/injury",
-          "nextgenstats": "https://example.com/nextgenstats"
+          "weather": "${WEATHER_ENDPOINT}",
+          "market": "${MARKET_ENDPOINT}",
+          "odds": "${ODDS_ENDPOINT}",
+          "injury_news": "${INJURY_ENDPOINT}",
+          "nextgenstats": "${NEXTGENSTATS_ENDPOINT}"
         },
         "api_keys": {
           "weather": "${WEATHER_API_KEY}",

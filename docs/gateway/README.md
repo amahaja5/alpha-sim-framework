@@ -1,5 +1,9 @@
 # Gateway Discovery Docs
 
+These docs describe endpoint discovery, contracts, and operating standards.
+This repository does not implement a gateway server; runtime behavior here is
+provider-client ingestion plus canonical contract validation/degradation.
+
 - Endpoint catalog: `docs/gateway/GATEWAY_ENDPOINT_CATALOG.md`
 - Game location resolution: `docs/gateway/GAME_LOCATION_RESOLUTION.md`
 - Venue registry template: `docs/gateway/nfl_venue_registry.template.json`

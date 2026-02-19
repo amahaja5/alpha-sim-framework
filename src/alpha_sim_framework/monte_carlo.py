@@ -47,6 +47,7 @@ class MonteCarloSimulator:
         self._validate_nfl_league_shape()
         self._team_map = {team.team_id: team for team in self.teams}
         self.schedule = self._get_remaining_schedule()
+        self._division_groups = self._get_division_groups()
         self.team_ratings = self._get_team_ratings()
         self.draft_rankings = {}
 
@@ -241,6 +242,33 @@ class MonteCarloSimulator:
     def _sort_teams_by_wins(self, season_wins: Dict[int, int]) -> List:
         tie_break = {team_id: float(self.rng.random()) for team_id in season_wins.keys()}
         return sorted(season_wins.items(), key=lambda pair: (pair[1], tie_break[pair[0]]), reverse=True)
+
+    def _get_division_groups(self) -> Dict[Any, List[int]]:
+        groups: Dict[Any, List[int]] = {}
+        for team in self.teams:
+            division_id = getattr(team, "division_id", None)
+            if division_id is None:
+                continue
+            groups.setdefault(division_id, []).append(team.team_id)
+        return groups
+
+    def _division_winners(self, season_wins: Dict[int, int]) -> List[int]:
+        winners: List[int] = []
+        for team_ids in self._division_groups.values():
+            if not team_ids:
+                continue
+
+            best_wins = max(season_wins.get(team_id, -1) for team_id in team_ids)
+            candidates = [team_id for team_id in team_ids if season_wins.get(team_id, -1) == best_wins]
+            if not candidates:
+                continue
+            if len(candidates) == 1:
+                winners.append(candidates[0])
+                continue
+
+            winner_idx = int(self.rng.integers(0, len(candidates)))
+            winners.append(candidates[winner_idx])
+        return winners
 
     def _apply_strategy_weights(self, weights: Dict[str, float]) -> Dict[int, Dict]:
         """Apply strategy weights to a copy of team ratings."""
@@ -470,6 +498,8 @@ class MonteCarloSimulator:
         game_ratings = ratings or self.team_ratings
         team1_score = self.rng.normal(game_ratings[team1_id]["mean"], game_ratings[team1_id]["std"])
         team2_score = self.rng.normal(game_ratings[team2_id]["mean"], game_ratings[team2_id]["std"])
+        if team1_score == team2_score:
+            return 1 if float(self.rng.random()) < 0.5 else 2
         return 1 if team1_score > team2_score else 2
 
     def simulate_season(self, ratings: Optional[Dict[int, Dict]] = None) -> Dict[int, int]:
@@ -526,6 +556,9 @@ class MonteCarloSimulator:
             for team_id, wins in season.items():
                 results[team_id]["wins"] += wins
 
+            for division_winner in self._division_winners(season):
+                results[division_winner]["division"] += 1
+
             playoff_teams = sorted_teams[:playoff_spots]
             for team_id, _ in playoff_teams:
                 results[team_id]["playoffs"] += 1
@@ -536,6 +569,7 @@ class MonteCarloSimulator:
 
         for team_id in results:
             results[team_id]["avg_wins"] = results[team_id]["wins"] / self.num_simulations
+            results[team_id]["division_odds"] = (results[team_id]["division"] / self.num_simulations) * 100
             results[team_id]["playoff_odds"] = (results[team_id]["playoffs"] / self.num_simulations) * 100
             results[team_id]["championship_odds"] = (results[team_id]["championship"] / self.num_simulations) * 100
 

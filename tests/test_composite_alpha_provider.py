@@ -231,3 +231,16 @@ class CompositeSignalProviderTest(TestCase):
         without_values = without_nextgen.get_player_adjustments(league, week=3)
 
         self.assertNotEqual(with_values.get(104), without_values.get(104))
+
+    def test_contract_error_adds_warning_and_degrades_feed_payload(self):
+        league = _build_league()
+        bad_kwargs = _provider_kwargs()
+        # Missing required keys for market canonical payload.
+        bad_kwargs["external_feeds"]["static_payloads"]["market"] = {"projections": {"101": 22.0}}
+        provider = CompositeSignalProvider(**bad_kwargs)
+
+        provider.get_player_adjustments(league, week=3)
+        payload = provider._get_week_payload(league, week=3)
+
+        self.assertTrue(any("market_contract_error" in warning for warning in provider.last_warnings))
+        self.assertIn("market:contract_invalid", payload["summary"]["quality_flags"])

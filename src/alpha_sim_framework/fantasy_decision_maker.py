@@ -41,6 +41,12 @@ class FantasyDecisionMaker:
         cache_dir: str = '.cache',
         num_simulations: int = 10000,
         alpha_mode: bool = False,
+        use_gmm: bool = True,
+        report_directory: str = "reports",
+        include_report_timestamp: bool = True,
+        free_agent_fetch_size: int = 100,
+        default_free_agent_recommendations: int = 10,
+        default_trade_opportunities: int = 5,
     ):
         """
         Initialize decision maker
@@ -54,6 +60,12 @@ class FantasyDecisionMaker:
             cache_dir: Directory for caching
             num_simulations: Number of Monte Carlo simulations
             alpha_mode: Enable alpha-layer season simulation output
+            use_gmm: Use GMM-based player performance models
+            report_directory: Default output directory for generated reports
+            include_report_timestamp: Include date stamp in report filename
+            free_agent_fetch_size: Number of free agents to fetch for analysis
+            default_free_agent_recommendations: Default top-N free agent recommendations
+            default_trade_opportunities: Default max trade opportunities shown
         """
         self.league_id = league_id
         self.team_id = team_id
@@ -61,6 +73,12 @@ class FantasyDecisionMaker:
         self.cache_dir = cache_dir
         self.num_simulations = num_simulations
         self.alpha_mode = alpha_mode
+        self.use_gmm = bool(use_gmm)
+        self.report_directory = str(report_directory or "reports")
+        self.include_report_timestamp = bool(include_report_timestamp)
+        self.free_agent_fetch_size = max(1, int(free_agent_fetch_size))
+        self.default_free_agent_recommendations = max(1, int(default_free_agent_recommendations))
+        self.default_trade_opportunities = max(1, int(default_trade_opportunities))
 
         # Create cache directory
         os.makedirs(cache_dir, exist_ok=True)
@@ -89,7 +107,7 @@ class FantasyDecisionMaker:
             league=self.league,
             num_simulations=num_simulations,
             cache_dir=cache_dir,
-            use_gmm=True
+            use_gmm=self.use_gmm
         )
         print("✅ Simulator ready!\n")
 
@@ -168,14 +186,17 @@ class FantasyDecisionMaker:
 
         print()
 
-    def analyze_free_agents(self, top_n: int = 10):
+    def analyze_free_agents(self, top_n: Optional[int] = None):
         """Analyze and recommend free agents"""
+        if top_n is None:
+            top_n = self.default_free_agent_recommendations
+
         print("=" * 80)
         print("🆓 FREE AGENT ANALYSIS (REST OF SEASON)")
         print("=" * 80)
 
         print(f"\n📥 Fetching free agents...")
-        free_agents = self.league.free_agents(size=100)
+        free_agents = self.league.free_agents(size=self.free_agent_fetch_size)
 
         print(f"🔍 Analyzing {len(free_agents)} free agents with ROS schedule awareness...\n")
         recommendations = self.simulator.recommend_free_agents(
@@ -229,8 +250,11 @@ class FantasyDecisionMaker:
         print(df.to_string(index=False))
         print()
 
-    def analyze_trades(self, max_opportunities: int = 5):
+    def analyze_trades(self, max_opportunities: Optional[int] = None):
         """Find and analyze trade opportunities"""
+        if max_opportunities is None:
+            max_opportunities = self.default_trade_opportunities
+
         print("=" * 80)
         print("🔄 TRADE OPPORTUNITY ANALYSIS (REST OF SEASON)")
         print("=" * 80)
@@ -344,12 +368,12 @@ class FantasyDecisionMaker:
     def generate_weekly_report(self, output_file: Optional[str] = None):
         """Generate comprehensive weekly report"""
         # Create reports directory if it doesn't exist
-        import os
-        reports_dir = "reports"
+        reports_dir = self.report_directory
         os.makedirs(reports_dir, exist_ok=True)
 
         if output_file is None:
-            output_file = os.path.join(reports_dir, f"weekly_report_week{self.league.current_week}_{datetime.now().strftime('%Y%m%d')}.txt")
+            suffix = f"_{datetime.now().strftime('%Y%m%d')}" if self.include_report_timestamp else ""
+            output_file = os.path.join(reports_dir, f"weekly_report_week{self.league.current_week}{suffix}.txt")
 
         print("=" * 80)
         print(f"📝 GENERATING WEEKLY REPORT")
@@ -378,10 +402,10 @@ class FantasyDecisionMaker:
             self.analyze_season_outlook()
 
             # Free Agents
-            self.analyze_free_agents(top_n=10)
+            self.analyze_free_agents(top_n=self.default_free_agent_recommendations)
 
             # Trades
-            self.analyze_trades(max_opportunities=5)
+            self.analyze_trades(max_opportunities=self.default_trade_opportunities)
 
         sys.stdout = original_stdout
 
@@ -768,18 +792,11 @@ Getting ESPN Cookies for Private Leagues:
 
     args = parser.parse_args()
     ab_config = {}
+    config = {}
 
     if args.ab_config:
         if not os.path.exists(args.ab_config):
             print(f"❌ Error: A/B config file not found: {args.ab_config}")
-            return 1
-
-    ab_provider_kwargs = None
-    if args.ab_provider_kwargs:
-        try:
-            ab_provider_kwargs = json.loads(args.ab_provider_kwargs)
-        except json.JSONDecodeError as e:
-            print(f"❌ Error: Invalid JSON in --ab-provider-kwargs: {e}")
             return 1
         try:
             ab_config = load_config(args.ab_config)
@@ -788,7 +805,18 @@ Getting ESPN Cookies for Private Leagues:
             print(f"❌ Error: Invalid JSON in A/B config file: {e}")
             return 1
         except Exception as e:
-            print(f"❌ Error loading A/B config: {e}")
+            print(f"❌ Error loading A/B config file: {e}")
+            return 1
+
+    ab_provider_kwargs = None
+    if args.ab_provider_kwargs:
+        try:
+            ab_provider_kwargs = json.loads(args.ab_provider_kwargs)
+            if not isinstance(ab_provider_kwargs, dict):
+                print("❌ Error: --ab-provider-kwargs must be a JSON object")
+                return 1
+        except json.JSONDecodeError as e:
+            print(f"❌ Error: Invalid JSON in --ab-provider-kwargs: {e}")
             return 1
 
     # Load from config file if provided
@@ -799,47 +827,66 @@ Getting ESPN Cookies for Private Leagues:
 
         try:
             config = load_config(args.config)
-
-            # Extract values from config
-            league_config = config.get('league', {})
-            sim_config = config.get('simulation', {})
-
-            # Use config values, allow CLI args to override
-            league_id = args.league_id or league_config.get('league_id')
-            team_id = args.team_id or league_config.get('team_id')
-            year = args.year or league_config.get('year', datetime.now().year)
-            swid = args.swid or league_config.get('swid')
-            espn_s2 = args.espn_s2 or league_config.get('espn_s2')
-            num_simulations = args.simulations or sim_config.get('num_simulations', 10000)
-            cache_dir = args.cache_dir or sim_config.get('cache_dir', '.cache')
-            alpha_mode = args.alpha_mode or sim_config.get('alpha_mode', False)
-
             print(f"📄 Loaded config from: {args.config}")
-
         except json.JSONDecodeError as e:
             print(f"❌ Error: Invalid JSON in config file: {e}")
             return 1
         except Exception as e:
             print(f"❌ Error loading config: {e}")
             return 1
-    else:
-        # Use command-line arguments
-        league_id = args.league_id
-        team_id = args.team_id
-        year = args.year or datetime.now().year
-        swid = args.swid
-        espn_s2 = args.espn_s2
-        num_simulations = args.simulations or 10000
-        cache_dir = args.cache_dir or '.cache'
-        alpha_mode = args.alpha_mode
 
-    if args.ab_eval:
+    league_config = config.get("league", {}) if isinstance(config, dict) else {}
+    sim_config = config.get("simulation", {}) if isinstance(config, dict) else {}
+    analysis_config = config.get("analysis", {}) if isinstance(config, dict) else {}
+    output_config = config.get("output", {}) if isinstance(config, dict) else {}
+    free_agent_cfg = analysis_config.get("free_agents", {}) if isinstance(analysis_config, dict) else {}
+    trades_cfg = analysis_config.get("trades", {}) if isinstance(analysis_config, dict) else {}
+
+    # Source precedence: defaults -> --config -> --ab-config (when --ab-eval) -> explicit CLI args.
+    league_id = league_config.get("league_id")
+    team_id = league_config.get("team_id")
+    year = league_config.get("year")
+    swid = league_config.get("swid")
+    espn_s2 = league_config.get("espn_s2")
+
+    num_simulations = sim_config.get("num_simulations", 10000)
+    cache_dir = sim_config.get("cache_dir", ".cache")
+    alpha_mode = bool(sim_config.get("alpha_mode", False))
+    use_gmm = bool(sim_config.get("use_gmm", True))
+    report_directory = output_config.get("report_directory", "reports")
+    include_report_timestamp = bool(output_config.get("include_timestamp", True))
+    free_agent_fetch_size = free_agent_cfg.get("fetch_size", 100)
+    default_free_agent_recommendations = free_agent_cfg.get("top_n_recommendations", 10)
+    default_trade_opportunities = trades_cfg.get("max_total_opportunities", 5)
+
+    if args.ab_eval and isinstance(ab_config, dict):
         ab_league = ab_config.get("league", {})
-        league_id = league_id or ab_config.get("league_id") or ab_league.get("league_id")
-        team_id = team_id or ab_config.get("team_id") or ab_league.get("team_id")
-        year = year or ab_config.get("year") or ab_league.get("year", datetime.now().year)
-        swid = swid or ab_config.get("swid") or ab_league.get("swid")
-        espn_s2 = espn_s2 or ab_config.get("espn_s2") or ab_league.get("espn_s2")
+        league_id = ab_config.get("league_id", ab_league.get("league_id", league_id))
+        team_id = ab_config.get("team_id", ab_league.get("team_id", team_id))
+        year = ab_config.get("year", ab_league.get("year", year))
+        swid = ab_config.get("swid", ab_league.get("swid", swid))
+        espn_s2 = ab_config.get("espn_s2", ab_league.get("espn_s2", espn_s2))
+
+    if args.league_id is not None:
+        league_id = args.league_id
+    if args.team_id is not None:
+        team_id = args.team_id
+    if args.year is not None:
+        year = args.year
+    if args.swid is not None:
+        swid = args.swid
+    if args.espn_s2 is not None:
+        espn_s2 = args.espn_s2
+    if args.simulations is not None:
+        num_simulations = args.simulations
+    if args.cache_dir is not None:
+        cache_dir = args.cache_dir
+    if args.alpha_mode:
+        alpha_mode = True
+
+    year = year or datetime.now().year
+    num_simulations = int(num_simulations or 10000)
+    cache_dir = str(cache_dir or ".cache")
 
     # Validate required parameters
     if league_id is None:
@@ -907,6 +954,12 @@ Getting ESPN Cookies for Private Leagues:
             cache_dir=cache_dir,
             num_simulations=num_simulations,
             alpha_mode=alpha_mode,
+            use_gmm=use_gmm,
+            report_directory=str(report_directory or "reports"),
+            include_report_timestamp=include_report_timestamp,
+            free_agent_fetch_size=int(free_agent_fetch_size or 100),
+            default_free_agent_recommendations=int(default_free_agent_recommendations or 10),
+            default_trade_opportunities=int(default_trade_opportunities or 5),
         )
 
         if args.historical_backtest:

@@ -13,6 +13,7 @@ from ..alpha_types import (
     SignalCaps,
     SignalWeights,
 )
+from ..feed_contracts import validate_canonical_feed
 from .feeds import (
     InjuryNewsFeedClient,
     MarketFeedClient,
@@ -70,6 +71,12 @@ def _lookup(mapping: Dict[Any, Any], key: Any, default: Any = None) -> Any:
             return mapping[str(key_int)]
 
     return default
+
+
+def _as_string_list(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
 
 
 def _coerce_dataclass(instance: Any, values: Dict[str, Any]) -> Any:
@@ -237,9 +244,73 @@ class CompositeSignalProvider:
                 "source_timestamp": "",
             }
 
+        payload = self._enforce_feed_contract(feed_name, payload)
+
         self._feed_cache[key] = copy.deepcopy(payload)
         self._feed_cache_ts[key] = time.time()
         return payload
+
+    def _contract_mode(self) -> str:
+        mode = str(getattr(self.config.runtime, "canonical_contract_mode", "warn") or "warn").strip().lower()
+        if mode in {"off", "warn", "strict"}:
+            return mode
+        return "warn"
+
+    def _contract_domains(self) -> set:
+        configured = getattr(self.config.runtime, "canonical_contract_domains", None)
+        if isinstance(configured, list):
+            domains = {str(value).strip().lower() for value in configured if str(value).strip()}
+            if domains:
+                return domains
+        return {"weather", "market", "odds", "injury_news", "nextgenstats"}
+
+    def _normalize_feed_payload(self, feed_name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = _as_dict(payload)
+        normalized["data"] = _as_dict(normalized.get("data", {}))
+        source_ts = normalized.get("source_timestamp")
+        normalized["source_timestamp"] = source_ts if isinstance(source_ts, str) and source_ts else ""
+        normalized["quality_flags"] = _as_string_list(normalized.get("quality_flags"))
+        normalized["warnings"] = _as_string_list(normalized.get("warnings"))
+        if not normalized["source_timestamp"]:
+            normalized["quality_flags"].append("missing_source_timestamp")
+            normalized["warnings"].append(f"{feed_name}_missing_source_timestamp")
+        return normalized
+
+    def _enforce_feed_contract(self, feed_name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = self._normalize_feed_payload(feed_name, payload)
+        mode = self._contract_mode()
+        if mode == "off":
+            return normalized
+
+        if any(
+            flag in {"feed_disabled", "endpoint_not_configured", "fetch_failed", "invalid_payload"}
+            for flag in normalized.get("quality_flags", [])
+        ):
+            return normalized
+
+        domain = str(feed_name).strip().lower()
+        if domain not in self._contract_domains():
+            return normalized
+
+        errors = validate_canonical_feed(domain, normalized)
+        if not errors:
+            return normalized
+
+        for error in errors:
+            warning = f"{feed_name}_contract_error:{error}"
+            if warning not in normalized["warnings"]:
+                normalized["warnings"].append(warning)
+        if "contract_invalid" not in normalized["quality_flags"]:
+            normalized["quality_flags"].append("contract_invalid")
+
+        # Contract failures always degrade to neutral data in warn mode.
+        normalized["data"] = {}
+        if "contract_degraded_to_empty" not in normalized["quality_flags"]:
+            normalized["quality_flags"].append("contract_degraded_to_empty")
+
+        if mode == "strict":
+            raise RuntimeError(f"{feed_name}_contract_invalid: {','.join(errors[:5])}")
+        return normalized
 
     def _fetch_all_feeds(self, league: Any, week: int) -> Tuple[Dict[str, Any], List[str]]:
         payloads: Dict[str, Any] = {}

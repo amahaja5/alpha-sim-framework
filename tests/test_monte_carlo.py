@@ -218,6 +218,38 @@ class MonteCarloSimulatorTest(TestCase):
 
         self.assertNotEqual(simulator1.run_simulations(), simulator2.run_simulations())
 
+    def test_simulate_game_tie_is_seeded_and_unbiased(self):
+        league1 = build_league()
+        league2 = build_league()
+        ratings = {
+            1: {"mean": 100.0, "std": 0.0},
+            2: {"mean": 100.0, "std": 0.0},
+        }
+
+        simulator1 = MonteCarloSimulator(league1, num_simulations=50, seed=77)
+        simulator2 = MonteCarloSimulator(league2, num_simulations=50, seed=77)
+
+        winners1 = [simulator1.simulate_game(1, 2, ratings=ratings) for _ in range(40)]
+        winners2 = [simulator2.simulate_game(1, 2, ratings=ratings) for _ in range(40)]
+
+        self.assertEqual(winners1, winners2)
+        self.assertIn(1, winners1)
+        self.assertIn(2, winners1)
+
+    def test_division_output_populated_when_divisions_exist(self):
+        league = build_league()
+        league.teams[0].division_id = 10
+        league.teams[1].division_id = 10
+        league.teams[2].division_id = 20
+        league.teams[3].division_id = 20
+
+        simulator = MonteCarloSimulator(league, num_simulations=120, seed=31)
+        results = simulator.run_simulations()
+
+        total_division_titles = sum(results[team_id]["division"] for team_id in results)
+        self.assertEqual(total_division_titles, simulator.num_simulations * 2)
+        self.assertTrue(all("division_odds" in results[team_id] for team_id in results))
+
     def test_analyze_draft_strategy_structure(self):
         league = build_league()
         simulator = MonteCarloSimulator(league, num_simulations=50, preseason=True, seed=3)
