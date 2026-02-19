@@ -114,6 +114,30 @@ def _validate_injury_data(data: Dict[str, Any]) -> List[str]:
     return errors
 
 
+def _validate_nextgenstats_data(data: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    player_metrics = data.get("player_metrics")
+    if not isinstance(player_metrics, dict):
+        return ["nextgenstats.player_metrics_missing_or_invalid"]
+
+    for player_id, metrics in player_metrics.items():
+        if not isinstance(metrics, dict):
+            errors.append(f"nextgenstats.player_metrics.{player_id}_not_object")
+            continue
+        numeric_fields = [
+            "usage_over_expected",
+            "route_participation",
+            "avg_separation",
+            "explosive_play_rate",
+            "volatility_index",
+        ]
+        for field in numeric_fields:
+            if field in metrics and not _is_number(metrics.get(field)):
+                errors.append(f"nextgenstats.player_metrics.{player_id}.{field}_invalid")
+
+    return errors
+
+
 def validate_canonical_feed(domain: str, payload: Dict[str, Any]) -> List[str]:
     domain_key = str(domain or "").strip().lower()
     errors = validate_feed_envelope(payload)
@@ -127,6 +151,8 @@ def validate_canonical_feed(domain: str, payload: Dict[str, Any]) -> List[str]:
         errors.extend(_validate_odds_data(data))
     elif domain_key in {"injury_news", "injury-news"}:
         errors.extend(_validate_injury_data(data))
+    elif domain_key == "nextgenstats":
+        errors.extend(_validate_nextgenstats_data(data))
     else:
         errors.append(f"unsupported_domain:{domain}")
 

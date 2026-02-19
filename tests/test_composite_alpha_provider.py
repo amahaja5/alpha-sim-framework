@@ -124,6 +124,24 @@ def _provider_kwargs():
                     "injury_status": {"203": "OUT", "106": "QUESTIONABLE"},
                     "team_injuries_by_position": {"2": {"RB": 1}},
                 },
+                "nextgenstats": {
+                    "player_metrics": {
+                        "101": {
+                            "usage_over_expected": 0.9,
+                            "route_participation": 0.68,
+                            "avg_separation": 1.7,
+                            "explosive_play_rate": 0.22,
+                            "volatility_index": 4.1,
+                        },
+                        "104": {
+                            "usage_over_expected": 1.4,
+                            "route_participation": 0.84,
+                            "avg_separation": 2.3,
+                            "explosive_play_rate": 0.41,
+                            "volatility_index": 6.2,
+                        },
+                    }
+                },
             },
         },
         "runtime": {
@@ -198,3 +216,18 @@ class CompositeSignalProviderTest(TestCase):
 
         self.assertIn(1, results)
         self.assertIn("playoff_odds", results[1])
+
+    def test_nextgenstats_payload_influences_adjustments(self):
+        league = _build_league()
+
+        base_kwargs = _provider_kwargs()
+        with_nextgen = CompositeSignalProvider(**base_kwargs)
+
+        without_nextgen_kwargs = _provider_kwargs()
+        without_nextgen_kwargs["external_feeds"]["static_payloads"].pop("nextgenstats", None)
+        without_nextgen = CompositeSignalProvider(**without_nextgen_kwargs)
+
+        with_values = with_nextgen.get_player_adjustments(league, week=3)
+        without_values = without_nextgen.get_player_adjustments(league, week=3)
+
+        self.assertNotEqual(with_values.get(104), without_values.get(104))

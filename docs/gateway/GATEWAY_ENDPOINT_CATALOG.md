@@ -8,6 +8,7 @@ This catalog is the source of truth for candidate endpoint discovery and promoti
 - `GET /v1/feeds/market?league_id=&year=&week=`
 - `GET /v1/feeds/odds?league_id=&year=&week=`
 - `GET /v1/feeds/injury-news?league_id=&year=&week=`
+- `GET /v1/feeds/nextgenstats?league_id=&year=&week=`
 - `GET /v1/meta/mappings?league_id=&year=`
 - `GET /v1/meta/game-locations?league_id=&year=&week=`
 
@@ -26,6 +27,7 @@ All canonical feed responses use:
 | `odds` | The Odds API (`sports` + `odds`) | SportsDataIO/Sportradar (phase 2) | Free/low-cost coverage first; paid SLA backup as upgrade path. |
 | `market` | Sleeper players + trending add/drop | FantasyPros projections/rankings (phase 2) | Free coverage for trend/sentiment proxies. |
 | `injury_news` | Sleeper player injury statuses + ESPN roster statuses | FantasyPros injury news endpoint | Free-first injury availability with optional richer paid news. |
+| `nextgenstats` | Gateway-managed NGS proxy feed | SportsDataIO advanced stats (paid) | NGS-style usage/efficiency metrics are often not openly accessible as a stable public API. |
 | `league_context` | ESPN via existing `espn_api` | Sleeper leagues (optional) | ESPN remains the simulation base context. |
 
 ## External Candidate Endpoints
@@ -62,6 +64,13 @@ All canonical feed responses use:
 - ESPN roster/player statuses through existing league object
 - FantasyPros injury news (upgrade)
   - `GET https://api.fantasypros.com/v2/{format}/nfl/news?category=injury`
+
+### Next Gen Stats (Usage / Efficiency / Volatility Enrichment)
+
+- Gateway proxy endpoint (recommended)
+  - `GET /v1/feeds/nextgenstats?league_id=&year=&week=`
+- Paid upgrade option (advanced metrics provider)
+  - Example: SportsDataIO advanced player metrics endpoints (licensed)
 
 ## Probe Workflow
 

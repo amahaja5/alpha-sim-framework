@@ -120,6 +120,26 @@
           "update_cadence": "minutes"
         }
       ]
+    },
+    "nextgenstats": {
+      "candidates": [
+        {
+          "name": "gateway-nextgenstats-canonical",
+          "url": "https://gateway.example.com/v1/feeds/nextgenstats",
+          "canonical_domain": "nextgenstats",
+          "auth": "internal_service_auth",
+          "cost": "internal",
+          "update_cadence": "hourly"
+        },
+        {
+          "name": "sportsdataio-advanced-player-stats",
+          "url": "https://api.sportsdata.io/v3/nfl/stats/json/PlayerSeasonStatsByWeek/2025/6",
+          "required_paths": [],
+          "auth": "header_api_key",
+          "cost": "paid_upgrade",
+          "update_cadence": "daily"
+        }
+      ]
     }
   }
 }

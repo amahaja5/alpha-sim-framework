@@ -51,3 +51,19 @@ class FeedContractsTest(TestCase):
         }
         errors = validate_canonical_feed("injury_news", payload)
         self.assertEqual(errors, [])
+
+    def test_validate_nextgenstats_contract(self):
+        payload = build_empty_envelope()
+        payload["data"] = {
+            "player_metrics": {
+                "101": {
+                    "usage_over_expected": 1.1,
+                    "route_participation": 0.82,
+                    "avg_separation": 2.0,
+                    "explosive_play_rate": 0.31,
+                    "volatility_index": 5.6,
+                }
+            }
+        }
+        errors = validate_canonical_feed("nextgenstats", payload)
+        self.assertEqual(errors, [])

@@ -51,6 +51,13 @@ uv run fantasy-decision-maker \
 uv run gateway-probe --config config.gateway_probe.template.json --output-dir reports/gateway_probe
 ```
 
+## TODO
+
+- Add `player_uncertainty_overrides` output to support variance-level adjustments (not only mean projection shifts).
+- Add `confidence_scores` output for per-player signal reliability and gating in downstream decisions.
+- Add `feature_attribution` output for explainability/audit trails of alpha contributions.
+- Add per-player `data_quality_flags` output to surface stale/missing/low-quality external feed inputs.
+
 ## Docs Index
 
 - [Getting Started](docs/GETTING_STARTED.md)

@@ -14,3 +14,4 @@ Canonical JSON schemas:
 - `docs/gateway/schemas/market_feed.schema.json`
 - `docs/gateway/schemas/odds_feed.schema.json`
 - `docs/gateway/schemas/injury_news_feed.schema.json`
+- `docs/gateway/schemas/nextgenstats_feed.schema.json`

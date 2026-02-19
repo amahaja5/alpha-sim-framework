@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NextGenStats Feed",
+  "type": "object",
+  "required": ["data", "source_timestamp", "quality_flags", "warnings"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "required": ["player_metrics"],
+      "properties": {
+        "player_metrics": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "usage_over_expected": { "type": "number" },
+              "route_participation": { "type": "number" },
+              "avg_separation": { "type": "number" },
+              "explosive_play_rate": { "type": "number" },
+              "volatility_index": { "type": "number" }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "source_timestamp": { "type": "string", "format": "date-time" },
+    "quality_flags": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

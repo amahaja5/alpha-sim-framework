@@ -36,6 +36,7 @@ Primary capabilities:
   - strict clipping/cap controls
   - graceful external-feed fallback
   - per-player diagnostics (`last_diagnostics`) and warnings (`last_warnings`)
+  - optional `nextgenstats` feed for usage/efficiency/volatility enrichment
 
 ## Persistent League Context
 

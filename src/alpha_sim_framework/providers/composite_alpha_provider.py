@@ -13,7 +13,13 @@ from ..alpha_types import (
     SignalCaps,
     SignalWeights,
 )
-from .feeds import InjuryNewsFeedClient, MarketFeedClient, OddsFeedClient, WeatherFeedClient
+from .feeds import (
+    InjuryNewsFeedClient,
+    MarketFeedClient,
+    NextGenStatsFeedClient,
+    OddsFeedClient,
+    WeatherFeedClient,
+)
 
 
 HEALTHY_STATUSES = {"NONE", "ACTIVE", ""}
@@ -152,6 +158,7 @@ class CompositeSignalProvider:
             "market": MarketFeedClient(self.config.external_feeds, self.config.runtime),
             "odds": OddsFeedClient(self.config.external_feeds, self.config.runtime),
             "injury_news": InjuryNewsFeedClient(self.config.external_feeds, self.config.runtime),
+            "nextgenstats": NextGenStatsFeedClient(self.config.external_feeds, self.config.runtime),
         }
 
         self._feed_cache: Dict[Tuple[str, int, int, int], Dict[str, Any]] = {}
@@ -293,6 +300,7 @@ class CompositeSignalProvider:
         market_data = _as_dict(_as_dict(feeds.get("market", {})).get("data", {}))
         odds_data = _as_dict(_as_dict(feeds.get("odds", {})).get("data", {}))
         injury_data = _as_dict(_as_dict(feeds.get("injury_news", {})).get("data", {}))
+        nextgen_data = _as_dict(_as_dict(feeds.get("nextgenstats", {})).get("data", {}))
 
         market_projections = _as_dict(market_data.get("projections", {}))
         usage_trend_map = _as_dict(market_data.get("usage_trend", {}))
@@ -307,6 +315,7 @@ class CompositeSignalProvider:
         team_weather = _as_dict(weather_data.get("team_weather", {}))
         injury_status_map = _as_dict(injury_data.get("injury_status", {}))
         team_injuries_by_position = _as_dict(injury_data.get("team_injuries_by_position", {}))
+        nextgen_player_metrics = _as_dict(nextgen_data.get("player_metrics", {}))
 
         team_map = {_team_id(team): team for team in teams if _team_id(team) is not None}
 
@@ -385,6 +394,12 @@ class CompositeSignalProvider:
                 volatility = float(np.std(np.array(recent_points[:6], dtype=float), ddof=1)) if len(recent_points) >= 2 else max(2.0, baseline * 0.2)
 
                 status = roster_status.get(pid, "NONE")
+                nextgen_metrics = _as_dict(_lookup(nextgen_player_metrics, pid, {}))
+                ng_usage_over_expected = _safe_float(nextgen_metrics.get("usage_over_expected", 0.0), 0.0)
+                ng_route_participation = _safe_float(nextgen_metrics.get("route_participation", 0.0), 0.0)
+                ng_avg_separation = _safe_float(nextgen_metrics.get("avg_separation", 0.0), 0.0)
+                ng_explosive_play_rate = _safe_float(nextgen_metrics.get("explosive_play_rate", 0.0), 0.0)
+                ng_volatility_index = _safe_float(nextgen_metrics.get("volatility_index", volatility), volatility)
                 opponent_id = None
                 team_obj = team_map.get(team_id)
                 if team_obj is not None:
@@ -397,10 +412,15 @@ class CompositeSignalProvider:
                 if external_projection is not None:
                     residual = _safe_float(external_projection, baseline) - baseline
                 projection_residual = self.config.residual_scale * residual
+                projection_residual += 0.20 * ng_explosive_play_rate
+                projection_residual += 0.10 * ng_avg_separation
 
                 usage_value = _lookup(usage_trend_map, pid)
                 if usage_value is None:
                     usage_value = recent_avg - older_avg
+                usage_value = _safe_float(usage_value, 0.0) + (0.30 * ng_usage_over_expected)
+                if pos in {"WR", "TE"}:
+                    usage_value += 0.12 * ng_route_participation
                 usage_scale = {
                     "RB": 1.15,
                     "WR": 1.10,
@@ -409,7 +429,7 @@ class CompositeSignalProvider:
                     "K": 0.40,
                     "D/ST": 0.40,
                 }.get(pos, 1.0)
-                usage_trend = self.config.usage_scale * _safe_float(usage_value, 0.0) * usage_scale
+                usage_trend = self.config.usage_scale * usage_value * usage_scale
 
                 injury_component = {
                     "OUT": -3.0,
@@ -441,7 +461,8 @@ class CompositeSignalProvider:
                     script_base = 0.05
                 game_script = script_base + (0.08 * ((implied_total - 22.0) / 3.0))
 
-                volatility_aware = (-0.08 * volatility) + (0.25 if volatility < 4.0 else 0.0)
+                volatility_proxy = max(0.0, (0.55 * volatility) + (0.45 * ng_volatility_index))
+                volatility_aware = (-0.08 * volatility_proxy) + (0.25 if volatility_proxy < 4.0 else 0.0)
 
                 weather_info = _as_dict(_lookup(team_weather, team_id, {}))
                 is_dome = bool(weather_info.get("is_dome", False))
@@ -527,6 +548,7 @@ class CompositeSignalProvider:
                     "player": getattr(player, "name", str(pid)),
                     "team_id": team_id,
                     "position": pos,
+                    "nextgen_metrics": nextgen_metrics,
                     "signals": clipped_signals,
                     "weighted_signals": weighted_signals,
                     "weighted_sum": weighted_sum,

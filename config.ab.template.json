@@ -57,13 +57,15 @@
           "weather": "https://example.com/weather",
           "market": "https://example.com/market",
           "odds": "https://example.com/odds",
-          "injury_news": "https://example.com/injury"
+          "injury_news": "https://example.com/injury",
+          "nextgenstats": "https://example.com/nextgenstats"
         },
         "api_keys": {
           "weather": "${WEATHER_API_KEY}",
           "market": "${MARKET_API_KEY}",
           "odds": "${ODDS_API_KEY}",
-          "injury_news": "${INJURY_API_KEY}"
+          "injury_news": "${INJURY_API_KEY}",
+          "nextgenstats": "${NEXTGENSTATS_API_KEY}"
         },
         "static_payloads": {}
       }

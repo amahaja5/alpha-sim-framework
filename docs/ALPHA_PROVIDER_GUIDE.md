@@ -48,6 +48,7 @@ provider = CompositeSignalProvider(
             "market": "https://example.com/market",
             "odds": "https://example.com/odds",
             "injury_news": "https://example.com/injury",
+            "nextgenstats": "https://example.com/nextgenstats",
         },
     },
 )
@@ -89,5 +90,27 @@ Built-in adapters:
 - `market`
 - `odds`
 - `injury_news`
+- `nextgenstats`
 
 If a feed is unavailable, the provider defaults that signal to neutral and continues.
+
+### `nextgenstats` canonical payload (expected)
+
+```json
+{
+  "data": {
+    "player_metrics": {
+      "12345": {
+        "usage_over_expected": 1.2,
+        "route_participation": 0.78,
+        "avg_separation": 2.1,
+        "explosive_play_rate": 0.35,
+        "volatility_index": 5.4
+      }
+    }
+  },
+  "source_timestamp": "2026-02-19T00:00:00+00:00",
+  "quality_flags": ["live_fetch"],
+  "warnings": []
+}
+```
