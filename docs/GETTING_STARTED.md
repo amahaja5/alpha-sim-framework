@@ -55,6 +55,12 @@ uv run fantasy-decision-maker \
   --espn-s2 "YOUR-ESPN-S2"
 ```
 
+## External API Object Reference
+
+If you need a quick map of `League`, `Team`, `Player`, and related upstream objects from `espn_api`, see:
+
+- [ESPN API Reference](ESPN_API_REFERENCE.md)
+
 ## Common Troubleshooting
 
 - Team not found:

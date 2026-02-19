@@ -40,6 +40,10 @@ Core package path: `src/alpha_sim_framework/`
 - Optional extension boundary:
   - external signals via provider protocol and safe wrappers.
 
+External object details for `espn_api` types are documented in:
+
+- [ESPN API Reference](ESPN_API_REFERENCE.md)
+
 ## CLI Entry
 
 - Script mapping in `pyproject.toml`:
