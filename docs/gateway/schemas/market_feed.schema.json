@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Market Feed",
+  "type": "object",
+  "required": ["data", "source_timestamp", "quality_flags", "warnings"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "required": ["projections", "usage_trend", "sentiment", "future_schedule_strength"],
+      "properties": {
+        "projections": { "type": "object" },
+        "usage_trend": { "type": "object" },
+        "sentiment": { "type": "object" },
+        "future_schedule_strength": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "source_timestamp": { "type": "string", "format": "date-time" },
+    "quality_flags": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

@@ -63,6 +63,16 @@ Run historical backtest using local context first:
 uv run fantasy-decision-maker --config config.json --historical-backtest --use-context
 ```
 
+## Probe Gateway Endpoints (Non-Prod)
+
+Use the endpoint probe runner to score candidate sources for weather/market/odds/injury domains:
+
+```bash
+uv run gateway-probe --config config.gateway_probe.template.json --output-dir reports/gateway_probe
+```
+
+See `docs/gateway/README.md` for schemas, endpoint catalog, game-location mapping, and go-live checklist.
+
 ## Private League Cookies
 
 For private leagues, pass cookies either in `config.json` or via CLI flags:

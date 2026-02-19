@@ -45,6 +45,12 @@ Primary capabilities:
   - derived behavior summaries and reactivity rankings
 - Historical backtest can optionally consume local context (`context_path`) before live ESPN fallback.
 
+## Gateway Discovery Toolkit
+
+- Endpoint discovery docs and scorecard templates live under `docs/gateway/`.
+- `gateway-probe` CLI (`src/alpha_sim_framework/gateway_probe.py`) can probe candidate endpoints and rank primary/backup choices by reliability + schema conformity.
+- Feed contract validation utilities (`src/alpha_sim_framework/feed_contracts.py`) provide canonical schema checks for weather/market/odds/injury domains.
+
 ## League Adapter Usage
 
 `from_espn_league(...)` (in `src/alpha_sim_framework/league_adapter.py`) converts a live `espn_api.football.League` object into the internal `LeagueLike` simulator context.

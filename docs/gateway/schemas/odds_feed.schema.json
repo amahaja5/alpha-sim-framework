@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Odds Feed",
+  "type": "object",
+  "required": ["data", "source_timestamp", "quality_flags", "warnings"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "required": ["defense_vs_position", "spread_by_team", "implied_total_by_team", "schedule_strength_by_team"],
+      "properties": {
+        "defense_vs_position": { "type": "object" },
+        "spread_by_team": { "type": "object" },
+        "implied_total_by_team": { "type": "object" },
+        "schedule_strength_by_team": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "source_timestamp": { "type": "string", "format": "date-time" },
+    "quality_flags": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

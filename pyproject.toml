@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 fantasy-decision-maker = "alpha_sim_framework.fantasy_decision_maker:main"
+gateway-probe = "alpha_sim_framework.gateway_probe:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

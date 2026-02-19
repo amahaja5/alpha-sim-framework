@@ -20,6 +20,10 @@ Core package path: `src/alpha_sim_framework/`
   - composite multi-signal provider for external + league-driven alpha generation
 - `providers/feeds/*.py`
   - feed adapters for weather, market, odds, and injury/news signals
+- `feed_contracts.py`
+  - canonical schema validators for feed payloads
+- `gateway_probe.py`
+  - endpoint probe runner and scorecard generation
 - `alpha_types.py`
   - `AlphaConfig`, `PlayerProjection`, provider protocol
 - `league_adapter.py`

@@ -1,0 +1,125 @@
+{
+  "context": {
+    "league_id": 123456,
+    "year": 2025,
+    "week": 6
+  },
+  "runtime": {
+    "attempts": 3,
+    "timeout_seconds": 3.0
+  },
+  "domains": {
+    "weather": {
+      "candidates": [
+        {
+          "name": "openweather-current",
+          "url": "https://api.openweathermap.org/data/2.5/weather",
+          "params": {
+            "lat": 39.9008,
+            "lon": -75.1675,
+            "units": "imperial",
+            "appid": "YOUR_OPENWEATHER_API_KEY"
+          },
+          "required_paths": [
+            "weather",
+            "main",
+            "wind.speed"
+          ],
+          "auth": "query_key",
+          "cost": "free_tier",
+          "update_cadence": "minutes"
+        },
+        {
+          "name": "weatherapi-current",
+          "url": "https://api.weatherapi.com/v1/current.json",
+          "params": {
+            "key": "YOUR_WEATHERAPI_KEY",
+            "q": "39.9008,-75.1675"
+          },
+          "required_paths": [
+            "current.temp_f",
+            "current.wind_mph"
+          ],
+          "auth": "query_key",
+          "cost": "free_tier",
+          "update_cadence": "minutes"
+        }
+      ]
+    },
+    "odds": {
+      "candidates": [
+        {
+          "name": "theoddsapi-sports",
+          "url": "https://api.the-odds-api.com/v4/sports",
+          "params": {
+            "apiKey": "YOUR_ODDS_API_KEY"
+          },
+          "required_paths": [],
+          "auth": "query_key",
+          "cost": "free_tier_limited",
+          "update_cadence": "hourly"
+        },
+        {
+          "name": "theoddsapi-nfl-odds",
+          "url": "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds",
+          "params": {
+            "apiKey": "YOUR_ODDS_API_KEY",
+            "regions": "us",
+            "markets": "h2h,spreads,totals"
+          },
+          "required_paths": [],
+          "auth": "query_key",
+          "cost": "free_tier_limited",
+          "update_cadence": "minutes"
+        }
+      ]
+    },
+    "market": {
+      "candidates": [
+        {
+          "name": "sleeper-players",
+          "url": "https://api.sleeper.app/v1/players/nfl",
+          "required_paths": [],
+          "auth": "none",
+          "cost": "free",
+          "update_cadence": "daily"
+        },
+        {
+          "name": "sleeper-trending-add",
+          "url": "https://api.sleeper.app/v1/players/nfl/trending/add",
+          "params": {
+            "lookback_hours": 24,
+            "limit": 200
+          },
+          "required_paths": [],
+          "auth": "none",
+          "cost": "free",
+          "update_cadence": "hourly"
+        }
+      ]
+    },
+    "injury_news": {
+      "candidates": [
+        {
+          "name": "sleeper-players-injury-status",
+          "url": "https://api.sleeper.app/v1/players/nfl",
+          "required_paths": [],
+          "auth": "none",
+          "cost": "free",
+          "update_cadence": "daily"
+        },
+        {
+          "name": "fantasypros-injury-news",
+          "url": "https://api.fantasypros.com/v2/json/nfl/news",
+          "params": {
+            "category": "injury"
+          },
+          "required_paths": [],
+          "auth": "api_key",
+          "cost": "paid_upgrade",
+          "update_cadence": "minutes"
+        }
+      ]
+    }
+  }
+}

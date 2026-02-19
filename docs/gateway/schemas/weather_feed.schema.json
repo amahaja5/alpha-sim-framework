@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Weather Feed",
+  "type": "object",
+  "required": ["data", "source_timestamp", "quality_flags", "warnings"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "required": ["team_weather"],
+      "properties": {
+        "team_weather": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["is_dome", "wind_mph", "precip_prob"],
+            "properties": {
+              "is_dome": { "type": "boolean" },
+              "wind_mph": { "type": "number" },
+              "precip_prob": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "source_timestamp": { "type": "string", "format": "date-time" },
+    "quality_flags": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

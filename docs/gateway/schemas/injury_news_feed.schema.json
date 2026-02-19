@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Injury News Feed",
+  "type": "object",
+  "required": ["data", "source_timestamp", "quality_flags", "warnings"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "required": ["injury_status", "team_injuries_by_position"],
+      "properties": {
+        "injury_status": { "type": "object" },
+        "team_injuries_by_position": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "source_timestamp": { "type": "string", "format": "date-time" },
+    "quality_flags": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

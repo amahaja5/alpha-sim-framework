@@ -45,12 +45,19 @@ uv run fantasy-decision-maker \
   --ab-eval
 ```
 
+## Gateway Endpoint Discovery
+
+```bash
+uv run gateway-probe --config config.gateway_probe.template.json --output-dir reports/gateway_probe
+```
+
 ## Docs Index
 
 - [Getting Started](docs/GETTING_STARTED.md)
 - [League Context](docs/LEAGUE_CONTEXT.md)
 - [Features](docs/FEATURES.md)
 - [Alpha Provider Guide](docs/ALPHA_PROVIDER_GUIDE.md)
+- [Gateway Discovery Docs](docs/gateway/README.md)
 - [Testing](docs/TESTING.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Changelog](CHANGELOG.md)
