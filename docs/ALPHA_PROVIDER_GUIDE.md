@@ -93,6 +93,31 @@ uv run fantasy-decision-maker \
   --ab-provider-kwargs '{"runtime":{"timeout_seconds":2.0}}'
 ```
 
+## As-Of V2 Leakage Guard
+
+`CompositeSignalProvider` supports backward as-of merge controls in runtime config:
+
+- `as_of_utc`: exact ISO timestamp cutoff (UTC).
+- `as_of_date`: date-only cutoff (`YYYY-MM-DD`) normalized to `00:00:00+00:00`.
+- `as_of_snapshot_enabled`: enable persisted snapshot history.
+- `as_of_snapshot_root`: snapshot storage root (default `data/feed_snapshots`).
+- `as_of_mode`: currently `backward_publish_time` only.
+- `as_of_missing_policy`: currently `degrade_warn` only.
+- `as_of_publication_lag_seconds_by_feed`: per-feed publish delay.
+- `as_of_max_staleness_seconds_by_feed`: per-feed stale threshold.
+- `as_of_snapshot_retention_days`: retention window for snapshot pruning.
+
+Validation rules:
+
+- Setting both `as_of_utc` and `as_of_date` raises a `ValueError`.
+- Invalid `as_of_date` format raises a `ValueError`.
+- Unknown `as_of_mode` / `as_of_missing_policy` values raise a `ValueError`.
+- Negative lag/staleness values raise a `ValueError`.
+
+Snapshot path layout:
+
+- `data/feed_snapshots/{league_id}/{year}/week_{week}/{feed_name}.jsonl`
+
 ## Feed Adapter Contract
 
 Feed adapters return:

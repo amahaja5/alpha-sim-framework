@@ -115,6 +115,15 @@ cp config.ab.free.template.json config.ab.free.json
 uv run fantasy-decision-maker --ab-config config.ab.free.json --ab-eval
 ```
 
+Leakage guard (recommended for historical-style evaluations):
+- Set either:
+  - `alpha_provider.kwargs.runtime.as_of_utc` (exact timestamp), or
+  - `alpha_provider.kwargs.runtime.as_of_date` (`YYYY-MM-DD`, interpreted as `00:00:00+00:00` UTC).
+- Do not set both fields at once; provider initialization raises an error if both are present.
+- Feed snapshots are persisted to `data/feed_snapshots` and used for backward as-of selection.
+- Fresh deployments need warm-up history in `data/feed_snapshots` before older `as_of` cutoffs can resolve rich snapshots.
+- Per-feed publication lag and max staleness gates are configurable in runtime maps.
+
 Optional provider override:
 
 ```bash

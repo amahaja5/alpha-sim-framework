@@ -4,6 +4,7 @@ __pycache__/
 .cache/
 reports/
 data/league_context/
+data/feed_snapshots/
 config.json
 config.ab.json
 config.ab.free.json

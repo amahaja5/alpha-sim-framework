@@ -1,3 +1,6 @@
+import json
+import os
+import tempfile
 from types import SimpleNamespace
 from unittest import TestCase
 
@@ -151,6 +154,15 @@ def _provider_kwargs():
     }
 
 
+def _as_envelope(data, source_timestamp):
+    return {
+        "data": data,
+        "source_timestamp": source_timestamp,
+        "quality_flags": ["static_payload"],
+        "warnings": [],
+    }
+
+
 def _provider_kwargs_extended():
     kwargs = _provider_kwargs()
     kwargs["enable_extended_signals"] = True
@@ -296,6 +308,169 @@ class CompositeSignalProviderTest(TestCase):
 
         self.assertTrue(any("market_contract_error" in warning for warning in provider.last_warnings))
         self.assertIn("market:contract_invalid", payload["summary"]["quality_flags"])
+
+    def test_as_of_cutoff_degrades_future_payload_to_prevent_leakage(self):
+        league = _build_league()
+        guarded_kwargs = _provider_kwargs()
+        market_payload = guarded_kwargs["external_feeds"]["static_payloads"]["market"]
+        guarded_kwargs["external_feeds"]["static_payloads"]["market"] = _as_envelope(
+            market_payload, "2025-12-01T00:00:00+00:00"
+        )
+        guarded_kwargs["runtime"]["as_of_utc"] = "2025-10-01T00:00:00+00:00"
+        guarded_kwargs["runtime"]["as_of_publication_lag_seconds_by_feed"] = {"market": 0}
+        guarded_kwargs["runtime"]["as_of_snapshot_enabled"] = False
+
+        provider = CompositeSignalProvider(**guarded_kwargs)
+        provider.get_player_adjustments(league, week=3)
+        payload = provider._get_week_payload(league, week=3)
+
+        self.assertTrue(any("market_as_of_violation" in warning for warning in provider.last_warnings))
+        self.assertIn("market:as_of_violation", payload["summary"]["quality_flags"])
+        self.assertIn("market:as_of_degraded_to_empty", payload["summary"]["quality_flags"])
+
+    def test_as_of_date_normalizes_to_utc_midnight(self):
+        league = _build_league()
+        guarded_kwargs = _provider_kwargs()
+        market_payload = guarded_kwargs["external_feeds"]["static_payloads"]["market"]
+        guarded_kwargs["external_feeds"]["static_payloads"]["market"] = _as_envelope(
+            market_payload, "2025-10-01T00:00:00+00:00"
+        )
+        guarded_kwargs["runtime"]["as_of_date"] = "2025-10-01"
+        guarded_kwargs["runtime"]["as_of_publication_lag_seconds_by_feed"] = {"market": 0}
+        guarded_kwargs["runtime"]["as_of_snapshot_enabled"] = False
+
+        provider = CompositeSignalProvider(**guarded_kwargs)
+        provider.get_player_adjustments(league, week=3)
+        payload = provider._get_week_payload(league, week=3)
+
+        self.assertIn("market:as_of_date_normalized", payload["summary"]["quality_flags"])
+        self.assertFalse(any("market_as_of_violation" in warning for warning in provider.last_warnings))
+
+    def test_as_of_rejects_both_timestamp_and_date(self):
+        guarded_kwargs = _provider_kwargs()
+        guarded_kwargs["runtime"]["as_of_utc"] = "2025-10-01T00:00:00+00:00"
+        guarded_kwargs["runtime"]["as_of_date"] = "2025-10-01"
+
+        with self.assertRaises(ValueError):
+            CompositeSignalProvider(**guarded_kwargs)
+
+    def test_as_of_backward_selection_uses_latest_eligible_snapshot(self):
+        league = _build_league()
+        guarded_kwargs = _provider_kwargs()
+        market_payload = guarded_kwargs["external_feeds"]["static_payloads"]["market"]
+        guarded_kwargs["external_feeds"]["static_payloads"]["market"] = _as_envelope(
+            market_payload, "2025-10-01T13:00:00+00:00"
+        )
+        guarded_kwargs["runtime"]["as_of_utc"] = "2025-10-01T12:00:00+00:00"
+        guarded_kwargs["runtime"]["as_of_publication_lag_seconds_by_feed"] = {"market": 0}
+        guarded_kwargs["runtime"]["as_of_snapshot_retention_days"] = 365
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            guarded_kwargs["runtime"]["as_of_snapshot_root"] = temp_dir
+            snapshot_file = (
+                f"{temp_dir}/{league.league_id}/{league.year}/week_3/market.jsonl"
+            )
+            os.makedirs(os.path.dirname(snapshot_file), exist_ok=True)
+            old_record = {
+                "schema_version": "1.0",
+                "observed_at_utc": "2025-10-01T09:00:00+00:00",
+                "league_id": league.league_id,
+                "year": league.year,
+                "week": 3,
+                "feed_name": "market",
+                "source_timestamp": "2025-10-01T10:00:00+00:00",
+                "availability_timestamp": "2025-10-01T10:00:00+00:00",
+                "payload": _as_envelope(
+                    {
+                        "projections": {"101": 11.0},
+                        "usage_trend": market_payload["usage_trend"],
+                        "sentiment": market_payload["sentiment"],
+                        "future_schedule_strength": market_payload["future_schedule_strength"],
+                    },
+                    "2025-10-01T10:00:00+00:00",
+                ),
+            }
+            new_record = {
+                "schema_version": "1.0",
+                "observed_at_utc": "2025-10-01T10:30:00+00:00",
+                "league_id": league.league_id,
+                "year": league.year,
+                "week": 3,
+                "feed_name": "market",
+                "source_timestamp": "2025-10-01T11:00:00+00:00",
+                "availability_timestamp": "2025-10-01T11:00:00+00:00",
+                "payload": _as_envelope(
+                    {
+                        "projections": {"101": 19.0},
+                        "usage_trend": market_payload["usage_trend"],
+                        "sentiment": market_payload["sentiment"],
+                        "future_schedule_strength": market_payload["future_schedule_strength"],
+                    },
+                    "2025-10-01T11:00:00+00:00",
+                ),
+            }
+            with open(snapshot_file, "w", encoding="utf-8") as file_obj:
+                file_obj.write(f"{json.dumps(old_record)}\n")
+                file_obj.write(f"{json.dumps(new_record)}\n")
+
+            provider = CompositeSignalProvider(**guarded_kwargs)
+            provider.get_player_adjustments(league, week=3)
+            market_feed = provider._fetch_feed("market", league, 3)
+
+        self.assertEqual(market_feed["data"]["projections"]["101"], 19.0)
+        self.assertIn("as_of_snapshot_selected", market_feed["quality_flags"])
+
+    def test_as_of_lag_can_block_recent_source_until_available(self):
+        league = _build_league()
+        guarded_kwargs = _provider_kwargs()
+        market_payload = guarded_kwargs["external_feeds"]["static_payloads"]["market"]
+        guarded_kwargs["external_feeds"]["static_payloads"]["market"] = _as_envelope(
+            market_payload, "2025-09-30T23:30:00+00:00"
+        )
+        guarded_kwargs["runtime"]["as_of_utc"] = "2025-10-01T00:00:00+00:00"
+        guarded_kwargs["runtime"]["as_of_snapshot_enabled"] = False
+
+        provider = CompositeSignalProvider(**guarded_kwargs)
+        provider.get_player_adjustments(league, week=3)
+        payload = provider._get_week_payload(league, week=3)
+
+        self.assertIn("market:as_of_violation", payload["summary"]["quality_flags"])
+        self.assertIn("market:as_of_degraded_to_empty", payload["summary"]["quality_flags"])
+
+    def test_as_of_staleness_degrades_old_candidate(self):
+        league = _build_league()
+        guarded_kwargs = _provider_kwargs()
+        market_payload = guarded_kwargs["external_feeds"]["static_payloads"]["market"]
+        guarded_kwargs["external_feeds"]["static_payloads"]["market"] = _as_envelope(
+            market_payload, "2025-10-01T00:00:00+00:00"
+        )
+        guarded_kwargs["runtime"]["as_of_utc"] = "2025-10-10T00:00:00+00:00"
+        guarded_kwargs["runtime"]["as_of_publication_lag_seconds_by_feed"] = {"market": 0}
+        guarded_kwargs["runtime"]["as_of_max_staleness_seconds_by_feed"] = {"market": 86400}
+        guarded_kwargs["runtime"]["as_of_snapshot_enabled"] = False
+
+        provider = CompositeSignalProvider(**guarded_kwargs)
+        provider.get_player_adjustments(league, week=3)
+        payload = provider._get_week_payload(league, week=3)
+
+        self.assertIn("market:as_of_stale", payload["summary"]["quality_flags"])
+        self.assertIn("market:as_of_degraded_to_empty", payload["summary"]["quality_flags"])
+
+    def test_as_of_missing_snapshot_degrades_with_warning(self):
+        league = _build_league()
+        guarded_kwargs = _provider_kwargs()
+        market_payload = guarded_kwargs["external_feeds"]["static_payloads"]["market"]
+        guarded_kwargs["external_feeds"]["static_payloads"]["market"] = _as_envelope(market_payload, "")
+        guarded_kwargs["runtime"]["as_of_utc"] = "2025-10-10T00:00:00+00:00"
+        guarded_kwargs["runtime"]["as_of_snapshot_enabled"] = False
+
+        provider = CompositeSignalProvider(**guarded_kwargs)
+        provider.get_player_adjustments(league, week=3)
+        payload = provider._get_week_payload(league, week=3)
+
+        self.assertIn("market:as_of_missing_snapshot", payload["summary"]["quality_flags"])
+        self.assertIn("market:as_of_degraded_to_empty", payload["summary"]["quality_flags"])
+        self.assertTrue(any("market_as_of_missing_snapshot" in warning for warning in provider.last_warnings))
 
     def test_extended_signals_disabled_preserves_legacy_weight_behavior(self):
         league = _build_league()

@@ -204,6 +204,31 @@ class ProviderRuntimeConfig:
     backoff_seconds: float = 0.2
     cache_ttl_seconds: int = 300
     degrade_gracefully: bool = True
+    as_of_utc: Optional[str] = None
+    as_of_date: Optional[str] = None
+    as_of_snapshot_enabled: bool = True
+    as_of_snapshot_root: str = "data/feed_snapshots"
+    as_of_mode: str = "backward_publish_time"
+    as_of_missing_policy: str = "degrade_warn"
+    as_of_publication_lag_seconds_by_feed: Dict[str, int] = field(
+        default_factory=lambda: {
+            "weather": 3600,
+            "market": 7200,
+            "odds": 3600,
+            "injury_news": 10800,
+            "nextgenstats": 21600,
+        }
+    )
+    as_of_max_staleness_seconds_by_feed: Dict[str, int] = field(
+        default_factory=lambda: {
+            "weather": 21600,
+            "market": 172800,
+            "odds": 21600,
+            "injury_news": 172800,
+            "nextgenstats": 604800,
+        }
+    )
+    as_of_snapshot_retention_days: int = 365
     canonical_contract_mode: str = "warn"
     canonical_contract_domains: List[str] = field(
         default_factory=lambda: ["weather", "market", "odds", "injury_news", "nextgenstats"]

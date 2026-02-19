@@ -65,6 +65,27 @@
         "retries": 1,
         "cache_ttl_seconds": 300,
         "degrade_gracefully": true,
+        "as_of_utc": null,
+        "as_of_date": null,
+        "as_of_snapshot_enabled": true,
+        "as_of_snapshot_root": "data/feed_snapshots",
+        "as_of_mode": "backward_publish_time",
+        "as_of_missing_policy": "degrade_warn",
+        "as_of_publication_lag_seconds_by_feed": {
+          "weather": 3600,
+          "market": 7200,
+          "odds": 3600,
+          "injury_news": 10800,
+          "nextgenstats": 21600
+        },
+        "as_of_max_staleness_seconds_by_feed": {
+          "weather": 21600,
+          "market": 172800,
+          "odds": 21600,
+          "injury_news": 172800,
+          "nextgenstats": 604800
+        },
+        "as_of_snapshot_retention_days": 365,
         "canonical_contract_mode": "warn",
         "canonical_contract_domains": ["weather", "market", "odds", "injury_news", "nextgenstats"]
       },

@@ -2,6 +2,7 @@ import copy
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, is_dataclass
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -21,6 +22,7 @@ from .feeds import (
     OddsFeedClient,
     WeatherFeedClient,
 )
+from .feeds.snapshot_store import append_snapshot_record, load_snapshot_records, make_snapshot_record, snapshot_path
 
 
 HEALTHY_STATUSES = {"NONE", "ACTIVE", ""}
@@ -98,6 +100,34 @@ def _as_string_list(value: Any) -> List[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str)]
+
+
+def _parse_iso_utc(value: Any) -> Optional[datetime]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _parse_iso_date_utc_midnight(value: Any) -> Optional[datetime]:
+    text = str(value or "").strip()
+    if not text or len(text) != 10:
+        return None
+    try:
+        parsed = date.fromisoformat(text)
+    except Exception:
+        return None
+    return datetime(parsed.year, parsed.month, parsed.day, tzinfo=timezone.utc)
+
+
+def _iso_utc(value: datetime) -> str:
+    return value.astimezone(timezone.utc).replace(microsecond=0).isoformat()
 
 
 def _coerce_dataclass(instance: Any, values: Dict[str, Any]) -> Any:
@@ -181,6 +211,7 @@ class CompositeSignalProvider:
 
     def __init__(self, config: Optional[Any] = None, **kwargs: Any):
         self.config = _to_composite_config(config, kwargs=kwargs)
+        self._validate_runtime_as_of_config()
         self._feeds = {
             "weather": WeatherFeedClient(self.config.external_feeds, self.config.runtime),
             "market": MarketFeedClient(self.config.external_feeds, self.config.runtime),
@@ -196,6 +227,40 @@ class CompositeSignalProvider:
 
         self._last_diagnostics: Dict[Any, Dict[str, Any]] = {}
         self._last_warnings: List[str] = []
+
+    def _validate_runtime_as_of_config(self) -> None:
+        runtime = self.config.runtime
+        as_of_utc = str(getattr(runtime, "as_of_utc", "") or "").strip()
+        as_of_date = str(getattr(runtime, "as_of_date", "") or "").strip()
+
+        if as_of_utc and as_of_date:
+            raise ValueError("Provider runtime must not set both as_of_utc and as_of_date")
+
+        if as_of_utc and _parse_iso_utc(as_of_utc) is None:
+            raise ValueError(f"Provider runtime has invalid as_of_utc: {as_of_utc}")
+
+        if as_of_date and _parse_iso_date_utc_midnight(as_of_date) is None:
+            raise ValueError(f"Provider runtime has invalid as_of_date (expected YYYY-MM-DD): {as_of_date}")
+
+        as_of_mode = str(getattr(runtime, "as_of_mode", "backward_publish_time") or "backward_publish_time").strip()
+        if as_of_mode != "backward_publish_time":
+            raise ValueError(f"Unsupported as_of_mode: {as_of_mode}")
+
+        missing_policy = str(getattr(runtime, "as_of_missing_policy", "degrade_warn") or "degrade_warn").strip()
+        if missing_policy != "degrade_warn":
+            raise ValueError(f"Unsupported as_of_missing_policy: {missing_policy}")
+
+        for field_name in ("as_of_publication_lag_seconds_by_feed", "as_of_max_staleness_seconds_by_feed"):
+            mapping = getattr(runtime, field_name, {})
+            if not isinstance(mapping, dict):
+                raise ValueError(f"Provider runtime field '{field_name}' must be a dict")
+            for key, value in mapping.items():
+                try:
+                    parsed = int(value)
+                except Exception as exc:
+                    raise ValueError(f"Invalid integer value for {field_name}.{key}: {value}") from exc
+                if parsed < 0:
+                    raise ValueError(f"Negative value for {field_name}.{key}: {value}")
 
     @property
     def last_diagnostics(self) -> Dict[Any, Dict[str, Any]]:
@@ -266,6 +331,8 @@ class CompositeSignalProvider:
             }
 
         payload = self._enforce_feed_contract(feed_name, payload)
+        payload = self._append_snapshot_record(feed_name, payload, league, week)
+        payload = self._resolve_as_of_payload(feed_name, payload, league, week)
 
         self._feed_cache[key] = copy.deepcopy(payload)
         self._feed_cache_ts[key] = time.time()
@@ -297,16 +364,265 @@ class CompositeSignalProvider:
             normalized["warnings"].append(f"{feed_name}_missing_source_timestamp")
         return normalized
 
+    def _is_unavailable_payload(self, payload: Dict[str, Any]) -> bool:
+        return any(
+            flag in {"feed_disabled", "endpoint_not_configured", "fetch_failed", "invalid_payload"}
+            for flag in payload.get("quality_flags", [])
+        )
+
+    def _resolve_as_of_cutoff(self) -> Optional[Tuple[datetime, str, str]]:
+        runtime = self.config.runtime
+        as_of_utc_raw = str(getattr(runtime, "as_of_utc", "") or "").strip()
+        if as_of_utc_raw:
+            parsed = _parse_iso_utc(as_of_utc_raw)
+            if parsed is not None:
+                return parsed, "utc", as_of_utc_raw
+            return None
+
+        as_of_date_raw = str(getattr(runtime, "as_of_date", "") or "").strip()
+        if as_of_date_raw:
+            parsed = _parse_iso_date_utc_midnight(as_of_date_raw)
+            if parsed is not None:
+                return parsed, "date", as_of_date_raw
+            return None
+
+        return None
+
+    def _feed_map_int(self, field_name: str, feed_name: str, default: int) -> int:
+        mapping = getattr(self.config.runtime, field_name, {})
+        value = default
+        if isinstance(mapping, dict):
+            value = mapping.get(feed_name, default)
+        try:
+            return max(0, int(value))
+        except Exception:
+            return max(0, int(default))
+
+    def _feed_publication_lag_seconds(self, feed_name: str) -> int:
+        defaults = {
+            "weather": 3600,
+            "market": 7200,
+            "odds": 3600,
+            "injury_news": 10800,
+            "nextgenstats": 21600,
+        }
+        return self._feed_map_int("as_of_publication_lag_seconds_by_feed", feed_name, defaults.get(feed_name, 0))
+
+    def _feed_max_staleness_seconds(self, feed_name: str) -> int:
+        defaults = {
+            "weather": 21600,
+            "market": 172800,
+            "odds": 21600,
+            "injury_news": 172800,
+            "nextgenstats": 604800,
+        }
+        return self._feed_map_int("as_of_max_staleness_seconds_by_feed", feed_name, defaults.get(feed_name, 0))
+
+    def _snapshot_enabled(self) -> bool:
+        return bool(getattr(self.config.runtime, "as_of_snapshot_enabled", True))
+
+    def _snapshot_file_path(self, feed_name: str, league: Any, week: int):
+        return snapshot_path(
+            root=str(getattr(self.config.runtime, "as_of_snapshot_root", "data/feed_snapshots") or "data/feed_snapshots"),
+            league_id=int(getattr(league, "league_id", 0) or 0),
+            year=int(getattr(league, "year", 0) or 0),
+            week=int(week),
+            feed_name=feed_name,
+        )
+
+    def _append_warning(self, payload: Dict[str, Any], warning: str) -> None:
+        if warning not in payload["warnings"]:
+            payload["warnings"].append(warning)
+
+    def _append_flag(self, payload: Dict[str, Any], flag: str) -> None:
+        if flag not in payload["quality_flags"]:
+            payload["quality_flags"].append(flag)
+
+    def _append_snapshot_record(self, feed_name: str, payload: Dict[str, Any], league: Any, week: int) -> Dict[str, Any]:
+        if not self._snapshot_enabled():
+            return payload
+        if self._is_unavailable_payload(payload):
+            return payload
+
+        source_ts = payload.get("source_timestamp", "")
+        source_dt = _parse_iso_utc(source_ts)
+        if source_dt is None:
+            return payload
+
+        lag_seconds = self._feed_publication_lag_seconds(feed_name)
+        availability_dt = source_dt + timedelta(seconds=lag_seconds)
+        path = self._snapshot_file_path(feed_name, league, week)
+        record = make_snapshot_record(
+            league_id=int(getattr(league, "league_id", 0) or 0),
+            year=int(getattr(league, "year", 0) or 0),
+            week=int(week),
+            feed_name=feed_name,
+            source_timestamp=source_ts,
+            availability_timestamp=_iso_utc(availability_dt),
+            payload=payload,
+        )
+        warnings = append_snapshot_record(
+            path=path,
+            record=record,
+            retention_days=max(0, int(getattr(self.config.runtime, "as_of_snapshot_retention_days", 365))),
+        )
+        for warning in warnings:
+            self._append_warning(payload, f"{feed_name}_{warning}")
+        return payload
+
+    def _candidate_from_payload(
+        self,
+        feed_name: str,
+        payload: Dict[str, Any],
+        lag_seconds: int,
+        origin: str,
+        *,
+        availability_timestamp: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        normalized_payload = self._normalize_feed_payload(feed_name, payload)
+        source_ts = normalized_payload.get("source_timestamp", "")
+        source_dt = _parse_iso_utc(source_ts)
+        if source_dt is None:
+            return None
+
+        availability_dt = _parse_iso_utc(availability_timestamp) if availability_timestamp else None
+        if availability_dt is None:
+            availability_dt = source_dt + timedelta(seconds=max(0, int(lag_seconds)))
+
+        return {
+            "origin": origin,
+            "payload": normalized_payload,
+            "source_dt": source_dt,
+            "availability_dt": availability_dt,
+            "source_timestamp": source_ts,
+            "availability_timestamp": _iso_utc(availability_dt),
+        }
+
+    def _load_snapshot_candidates(
+        self,
+        feed_name: str,
+        league: Any,
+        week: int,
+        lag_seconds: int,
+    ) -> Tuple[List[Dict[str, Any]], List[str]]:
+        if not self._snapshot_enabled():
+            return [], []
+
+        path = self._snapshot_file_path(feed_name, league, week)
+        records, warnings = load_snapshot_records(path)
+        out: List[Dict[str, Any]] = []
+
+        for row in records:
+            payload = _as_dict(row.get("payload"))
+            if not payload:
+                warnings.append(f"snapshot_record_missing_payload:{path}")
+                continue
+            candidate = self._candidate_from_payload(
+                feed_name=feed_name,
+                payload=payload,
+                lag_seconds=lag_seconds,
+                origin="snapshot",
+                availability_timestamp=row.get("availability_timestamp"),
+            )
+            if candidate is None:
+                warnings.append(f"snapshot_record_invalid_timestamp:{path}")
+                continue
+            out.append(candidate)
+        return out, warnings
+
+    def _degrade_as_of(self, payload: Dict[str, Any], flag: str, warning: str) -> Dict[str, Any]:
+        payload["data"] = {}
+        self._append_flag(payload, flag)
+        self._append_flag(payload, "as_of_degraded_to_empty")
+        self._append_warning(payload, warning)
+        return payload
+
+    def _resolve_as_of_payload(self, feed_name: str, payload: Dict[str, Any], league: Any, week: int) -> Dict[str, Any]:
+        if self._is_unavailable_payload(payload):
+            return payload
+
+        cutoff = self._resolve_as_of_cutoff()
+        if cutoff is None:
+            return payload
+
+        cutoff_dt, cutoff_source, cutoff_raw = cutoff
+        lag_seconds = self._feed_publication_lag_seconds(feed_name)
+        max_staleness_seconds = self._feed_max_staleness_seconds(feed_name)
+        candidates: List[Dict[str, Any]] = []
+
+        current_candidate = self._candidate_from_payload(
+            feed_name=feed_name,
+            payload=payload,
+            lag_seconds=lag_seconds,
+            origin="current",
+        )
+        if current_candidate is None:
+            self._append_flag(payload, "as_of_source_timestamp_invalid")
+            self._append_warning(payload, f"{feed_name}_as_of_source_timestamp_invalid:{payload.get('source_timestamp', '')}")
+        else:
+            if current_candidate["availability_dt"] <= cutoff_dt:
+                candidates.append(current_candidate)
+            else:
+                self._append_flag(payload, "as_of_violation")
+                self._append_warning(
+                    payload,
+                    f"{feed_name}_as_of_violation:{current_candidate['availability_timestamp']}>{_iso_utc(cutoff_dt)}",
+                )
+
+        snapshot_candidates, snapshot_warnings = self._load_snapshot_candidates(
+            feed_name=feed_name,
+            league=league,
+            week=week,
+            lag_seconds=lag_seconds,
+        )
+        for warning in snapshot_warnings:
+            self._append_warning(payload, f"{feed_name}_{warning}")
+        for candidate in snapshot_candidates:
+            if candidate["availability_dt"] <= cutoff_dt:
+                candidates.append(candidate)
+
+        if not candidates:
+            return self._degrade_as_of(
+                payload,
+                "as_of_missing_snapshot",
+                f"{feed_name}_as_of_missing_snapshot:{_iso_utc(cutoff_dt)}",
+            )
+
+        selected = max(candidates, key=lambda item: item["availability_dt"])
+        selected_payload = selected["payload"]
+        if selected["origin"] == "snapshot":
+            self._append_flag(selected_payload, "as_of_snapshot_selected")
+            self._append_warning(
+                selected_payload,
+                f"{feed_name}_as_of_snapshot_selected:{selected['availability_timestamp']}",
+            )
+            for warning in payload.get("warnings", []):
+                self._append_warning(selected_payload, warning)
+            for flag in payload.get("quality_flags", []):
+                self._append_flag(selected_payload, flag)
+
+        if cutoff_source == "date":
+            self._append_flag(selected_payload, "as_of_date_normalized")
+            self._append_warning(selected_payload, f"{feed_name}_as_of_date_normalized:{cutoff_raw}->00:00:00+00:00")
+
+        age_seconds = (cutoff_dt - selected["availability_dt"]).total_seconds()
+        if age_seconds > max(0, int(max_staleness_seconds)):
+            return self._degrade_as_of(
+                selected_payload,
+                "as_of_stale",
+                f"{feed_name}_as_of_stale:age={int(age_seconds)}>{int(max_staleness_seconds)}",
+            )
+
+        return selected_payload
+
     def _enforce_feed_contract(self, feed_name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         normalized = self._normalize_feed_payload(feed_name, payload)
-        mode = self._contract_mode()
-        if mode == "off":
+
+        if self._is_unavailable_payload(normalized):
             return normalized
 
-        if any(
-            flag in {"feed_disabled", "endpoint_not_configured", "fetch_failed", "invalid_payload"}
-            for flag in normalized.get("quality_flags", [])
-        ):
+        mode = self._contract_mode()
+        if mode == "off":
             return normalized
 
         domain = str(feed_name).strip().lower()
