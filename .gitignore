@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .cache/
 reports/
+data/league_context/
 config.json
 
 *.egg-info/
