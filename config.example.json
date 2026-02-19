@@ -1,0 +1,39 @@
+{
+  "league": {
+    "league_id": 123456,
+    "team_id": 1,
+    "year": 2024,
+    "swid": null,
+    "espn_s2": null
+  },
+  "simulation": {
+    "num_simulations": 10000,
+    "use_gmm": true,
+    "cache_dir": ".cache",
+    "cache_ttl_hours": 24
+  },
+  "analysis": {
+    "free_agents": {
+      "fetch_size": 100,
+      "top_n_recommendations": 10,
+      "positions_filter": null
+    },
+    "trades": {
+      "min_advantage": 3.0,
+      "max_trades_per_team": 2,
+      "max_total_opportunities": 10
+    },
+    "matchup": {
+      "confidence_levels": {
+        "strong_favorite": 70,
+        "slight_favorite": 55,
+        "toss_up": 45
+      }
+    }
+  },
+  "output": {
+    "report_directory": "reports",
+    "include_timestamp": true,
+    "format": "text"
+  }
+}
