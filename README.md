@@ -22,3 +22,18 @@ fantasy-decision-maker --league-id <LEAGUE_ID> --team-id <TEAM_ID> --year 2024
 ```
 
 This package expects league/team/player objects from `espn_api.football.League`.
+
+## League Adapter Template
+
+Use `from_espn_league` to freeze live ESPN objects into a stable `LeagueLike` shape:
+
+```python
+from espn_api.football import League
+from alpha_sim_framework import MonteCarloSimulator, from_espn_league
+
+espn_league = League(league_id=123, year=2026, espn_s2="...", swid="...")
+league_ctx = from_espn_league(espn_league)
+
+sim = MonteCarloSimulator(league_ctx, num_simulations=2000, alpha_mode=True)
+results = sim.run_simulations(explain=True)
+```
