@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
 
 
 @dataclass
@@ -41,6 +41,43 @@ class HistoricalBacktestConfig:
     min_weeks_per_opponent: int = 2
     include_playoffs: bool = False
     narrative_mode: str = "rule_based"
+
+
+@dataclass
+class LeagueContextConfig:
+    league_id: int
+    year: int
+    swid: Optional[str] = None
+    espn_s2: Optional[str] = None
+    context_dir: str = "data/league_context"
+    lookback_seasons: int = 3
+    start_year: Optional[int] = None
+    end_year: Optional[int] = None
+    full_refresh: bool = False
+    include_playoffs: bool = False
+
+
+@dataclass
+class ContextSyncResult:
+    context_root: str
+    sync_mode: str
+    seasons_requested: List[int]
+    seasons_synced: List[int]
+    seasons_skipped: List[int]
+    warnings: List[str] = field(default_factory=list)
+    record_counts: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ContextManifest:
+    league_id: int
+    seasons: List[int]
+    last_sync_utc: str
+    sync_mode: str
+    record_counts: Dict[str, Any]
+    data_quality_flags: List[str]
+    schema_version: str
+    endpoint_watermarks: Dict[str, Dict[str, int]]
 
 
 class ExternalSignalProvider(Protocol):

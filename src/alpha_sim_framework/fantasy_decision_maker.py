@@ -16,11 +16,13 @@ import argparse
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 from espn_api.football import League
 from .advanced_simulator import AdvancedFantasySimulator
+from .league_context import build_league_context
 from .monte_carlo import MonteCarloSimulator
 
 
@@ -392,6 +394,7 @@ class FantasyDecisionMaker:
         output_json: Optional[str] = None,
         swid: Optional[str] = None,
         espn_s2: Optional[str] = None,
+        context_path: Optional[str] = None,
     ) -> dict:
         print("=" * 80)
         print("📚 HISTORICAL OPPONENT TENDENCY BACKTEST")
@@ -408,6 +411,8 @@ class FantasyDecisionMaker:
             "swid": swid,
             "espn_s2": espn_s2,
         }
+        if context_path:
+            config["context_path"] = context_path
 
         simulator = self._get_monte_carlo_simulator()
         results = simulator.run_historical_opponent_backtest(config=config)
@@ -493,6 +498,58 @@ def load_config(config_path: str) -> dict:
         return json.load(f)
 
 
+def build_context_from_cli(
+    *,
+    league_id: int,
+    year: int,
+    swid: Optional[str],
+    espn_s2: Optional[str],
+    context_dir: str,
+    lookback_seasons: int,
+    start_year: Optional[int],
+    end_year: Optional[int],
+    full_refresh: bool,
+    output_summary_json: Optional[str] = None,
+) -> dict:
+    print("=" * 80)
+    print("🧱 BUILDING LEAGUE CONTEXT")
+    print("=" * 80)
+    result = build_league_context(
+        {
+            "league_id": league_id,
+            "year": year,
+            "swid": swid,
+            "espn_s2": espn_s2,
+            "context_dir": context_dir,
+            "lookback_seasons": lookback_seasons,
+            "start_year": start_year,
+            "end_year": end_year,
+            "full_refresh": full_refresh,
+        }
+    )
+
+    print(f"\nContext Root:      {result.get('context_root')}")
+    print(f"Sync Mode:         {result.get('sync_mode')}")
+    print(f"Seasons Requested: {result.get('seasons_requested')}")
+    print(f"Seasons Synced:    {result.get('seasons_synced')}")
+    skipped = result.get("seasons_skipped", [])
+    if skipped:
+        print(f"Seasons Skipped:   {skipped}")
+    warnings = result.get("warnings", [])
+    if warnings:
+        print("\nWarnings:")
+        for warning in warnings[:20]:
+            print(f"  - {warning}")
+
+    if output_summary_json:
+        output_path = Path(output_summary_json)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(result, indent=2, sort_keys=True))
+        print(f"\n✅ Context summary saved to: {output_summary_json}")
+    print()
+    return result
+
+
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(
@@ -518,6 +575,9 @@ Examples:
 
   # Historical opponent tendencies
   uv run fantasy-decision-maker --league-id 123456 --team-id 1 --historical-backtest --lookback-seasons 3
+
+  # Build persistent league context
+  uv run fantasy-decision-maker --config config.json --build-context --context-lookback-seasons 3
 
 Getting ESPN Cookies for Private Leagues:
   1. Log into ESPN Fantasy Football in your browser
@@ -560,6 +620,22 @@ Getting ESPN Cookies for Private Leagues:
                         help='Include playoff weeks in historical backtest')
     parser.add_argument('--historical-output-json', type=str, default=None,
                         help='Optional JSON path for historical backtest output')
+    parser.add_argument('--build-context', action='store_true',
+                        help='Build/update persistent league context and exit')
+    parser.add_argument('--context-dir', type=str, default='data/league_context',
+                        help='Root directory for league context data')
+    parser.add_argument('--context-lookback-seasons', type=int, default=3,
+                        help='Context lookback (prior seasons; current year included)')
+    parser.add_argument('--context-start-year', type=int, default=None,
+                        help='Context start year (inclusive)')
+    parser.add_argument('--context-end-year', type=int, default=None,
+                        help='Context end year (inclusive)')
+    parser.add_argument('--context-full-refresh', action='store_true',
+                        help='Force full context rebuild for selected seasons')
+    parser.add_argument('--use-context', action='store_true',
+                        help='Use local context store for historical backtest when available')
+    parser.add_argument('--context-output-summary-json', type=str, default=None,
+                        help='Optional JSON path for context build summary')
 
     args = parser.parse_args()
 
@@ -609,9 +685,30 @@ Getting ESPN Cookies for Private Leagues:
     if league_id is None:
         print("❌ Error: --league-id is required (or specify --config)")
         return 1
-    if team_id is None:
+    if team_id is None and not args.build_context:
         print("❌ Error: --team-id is required (or specify --config)")
         return 1
+
+    if args.build_context:
+        try:
+            build_context_from_cli(
+                league_id=league_id,
+                year=year,
+                swid=swid,
+                espn_s2=espn_s2,
+                context_dir=args.context_dir,
+                lookback_seasons=args.context_lookback_seasons,
+                start_year=args.context_start_year,
+                end_year=args.context_end_year,
+                full_refresh=args.context_full_refresh,
+                output_summary_json=args.context_output_summary_json,
+            )
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return 1
+        return 0
 
     # Create decision maker
     try:
@@ -627,6 +724,9 @@ Getting ESPN Cookies for Private Leagues:
         )
 
         if args.historical_backtest:
+            context_path = None
+            if args.use_context:
+                context_path = str(Path(args.context_dir) / str(league_id))
             dm.analyze_historical_opponents(
                 lookback_seasons=args.lookback_seasons,
                 start_year=args.start_year,
@@ -635,6 +735,7 @@ Getting ESPN Cookies for Private Leagues:
                 output_json=args.historical_output_json,
                 swid=swid,
                 espn_s2=espn_s2,
+                context_path=context_path,
             )
         elif args.report_only:
             # Generate report and exit

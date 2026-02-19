@@ -20,6 +20,7 @@ Primary capabilities:
 - Move optimization (`get_optimal_moves`)
 - Draft strategy analysis (`analyze_draft_strategy`)
 - Alpha APIs (`recommend_lineup`, `backtest_alpha`)
+- League context APIs (`build_league_context`, `load_league_context`)
 
 ## Alpha Mode, Explainability, and Provider Hooks
 
@@ -29,6 +30,14 @@ Primary capabilities:
   - `get_optimal_moves(..., explain=True)`
   - `recommend_lineup(..., explain=True)`
 - External signal providers are supported through `alpha_provider` wrappers for safe fallback behavior.
+
+## Persistent League Context
+
+- `league_context.py` provides:
+  - local ESPN context build/sync
+  - normalized yearly tables (teams, weekly scores, lineups, transactions)
+  - derived behavior summaries and reactivity rankings
+- Historical backtest can optionally consume local context (`context_path`) before live ESPN fallback.
 
 ## League Adapter Usage
 

@@ -7,6 +7,7 @@ Standalone NFL decision/simulation framework that integrates with `espn_api` lea
 - `AdvancedFantasySimulator` for matchup, trade, and free-agent analysis
 - `MonteCarloSimulator` for season/playoff simulation plus alpha-mode workflows
 - Alpha utility modules (`alpha_model`, `alpha_snapshot`, `alpha_backtest`, `alpha_provider`, `alpha_types`)
+- League context pipeline (`league_context`) for persistent ESPN history + derived behavior analytics
 - League adapter (`from_espn_league`) to convert live ESPN objects into a stable internal shape
 - CLI entrypoint: `fantasy-decision-maker`
 
@@ -38,6 +39,7 @@ results = sim.run_simulations(explain=True)
 ## Docs Index
 
 - [Getting Started](docs/GETTING_STARTED.md)
+- [League Context](docs/LEAGUE_CONTEXT.md)
 - [Features](docs/FEATURES.md)
 - [Testing](docs/TESTING.md)
 - [Architecture](docs/ARCHITECTURE.md)

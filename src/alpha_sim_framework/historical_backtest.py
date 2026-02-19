@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from .alpha_types import HistoricalBacktestConfig
+from .league_context import build_league_loader_from_context
 
 
 def _normalize_name(value: str) -> str:
@@ -255,7 +256,15 @@ def run_historical_backtest(simulator: Any, config: Optional[Dict[str, Any]] = N
     )
     years = _resolve_year_window(current_year, payload)
 
+    warnings: List[str] = []
     league_loader = runtime_config.get("league_loader")
+    context_path = runtime_config.get("context_path")
+    if context_path:
+        try:
+            league_loader = build_league_loader_from_context(str(context_path))
+        except Exception as exc:
+            warnings.append(f"context_load_failed:{exc}")
+
     if league_loader is None:
         from espn_api.football import League
 
@@ -271,7 +280,6 @@ def run_historical_backtest(simulator: Any, config: Optional[Dict[str, Any]] = N
     target_name = getattr(current_target_team, "team_name", f"team-{target_team_id}")
 
     aggregate: Dict[str, Dict[str, Any]] = {}
-    warnings: List[str] = []
     skipped_years: List[int] = []
     analyzed_years: List[int] = []
 

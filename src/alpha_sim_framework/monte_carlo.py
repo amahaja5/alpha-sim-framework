@@ -5,6 +5,7 @@ import numpy as np
 
 from .alpha_backtest import run_backtest
 from .historical_backtest import run_historical_backtest
+from .league_context import build_league_context, load_league_context
 from .alpha_model import project_players
 from .alpha_provider import SafeSignalProvider
 from .alpha_snapshot import build_week_snapshot
@@ -732,3 +733,14 @@ class MonteCarloSimulator:
 
     def run_historical_opponent_backtest(self, config: Optional[dict] = None) -> Dict[str, Any]:
         return run_historical_backtest(self, config=config)
+
+    def build_league_context(self, config: Optional[dict] = None) -> Dict[str, Any]:
+        payload = dict(config or {})
+        payload.setdefault("league_id", getattr(self.league, "league_id", None))
+        payload.setdefault("year", getattr(self.league, "year", None))
+        if payload.get("league_id") is None or payload.get("year") is None:
+            raise ValueError("build_league_context requires league_id and year in config or simulator league")
+        return build_league_context(payload)
+
+    def load_league_context(self, path: str) -> Dict[str, Any]:
+        return load_league_context(path)

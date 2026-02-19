@@ -1,4 +1,7 @@
 import copy
+import json
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
 
@@ -342,6 +345,161 @@ class MonteCarloSimulatorTest(TestCase):
 
         self.assertEqual(backtest["analysis_window"]["years_requested"], [2023, 2024, 2025])
         self.assertIn("opponents", backtest)
+
+    def test_run_historical_opponent_backtest_context_path_parity_with_live_loader(self):
+        def build_small_league():
+            team1 = DummyTeam(1, "Team 1", 1, 0, [105.0, 90.0], ["W", "L"], [DummyPlayer("RB", 200, 14.0)])
+            team2 = DummyTeam(2, "Team 2", 1, 0, [95.0, 101.0], ["L", "W"], [DummyPlayer("RB", 210, 15.0)])
+            team1.schedule = [team2, team2]
+            team2.schedule = [team1, team1]
+
+            class Matchup:
+                def __init__(self, home_team, away_team, home_lineup, away_lineup, home_score, away_score):
+                    self.home_team = home_team
+                    self.away_team = away_team
+                    self.home_lineup = home_lineup
+                    self.away_lineup = away_lineup
+                    self.home_score = home_score
+                    self.away_score = away_score
+
+            class Lg:
+                def __init__(self):
+                    self.league_id = 1
+                    self.year = 2025
+                    self.current_week = 2
+                    self.settings = SimpleNamespace(reg_season_count=2, playoff_team_count=2)
+                    self.teams = [team1, team2]
+
+                def box_scores(self, week=None):
+                    if week == 1:
+                        return [Matchup(team1, team2, team1.roster, team2.roster, 105.0, 95.0)]
+                    if week == 2:
+                        return [Matchup(team1, team2, team1.roster, team2.roster, 90.0, 101.0)]
+                    return []
+
+            return Lg()
+
+        simulator = MonteCarloSimulator(build_league(), num_simulations=20, seed=22, alpha_mode=True)
+        live = simulator.run_historical_opponent_backtest(
+            config={
+                "league_id": 1,
+                "team_id": 1,
+                "year": 2025,
+                "start_year": 2025,
+                "end_year": 2025,
+                "league_loader": lambda year: build_small_league(),
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "raw" / "2025" / "box_scores").mkdir(parents=True, exist_ok=True)
+            manifest = {
+                "league_id": 1,
+                "seasons": [2025],
+                "last_sync_utc": "2026-01-01T00:00:00+00:00",
+                "sync_mode": "full",
+                "record_counts": {},
+                "data_quality_flags": [],
+                "schema_version": "1.0",
+                "endpoint_watermarks": {"2025": {"last_activity_offset": 0, "last_completed_week": 2}},
+            }
+            (root / "context_manifest.json").write_text(json.dumps(manifest))
+            snapshot = {
+                "league_id": 1,
+                "year": 2025,
+                "current_week": 2,
+                "reg_season_count": 2,
+                "playoff_team_count": 2,
+                "teams": [
+                    {
+                        "team_id": 1,
+                        "team_name": "Team 1",
+                        "wins": 1,
+                        "losses": 1,
+                        "scores": [105.0, 90.0],
+                        "outcomes": ["W", "L"],
+                        "schedule": [2, 2],
+                        "roster": [
+                            {
+                                "playerId": 1,
+                                "name": "RB-1",
+                                "position": "RB",
+                                "lineupSlot": "RB",
+                                "slot_position": "RB",
+                                "stats": {1: {"points": 15.0}, 2: {"points": 11.0}},
+                            }
+                        ],
+                    },
+                    {
+                        "team_id": 2,
+                        "team_name": "Team 2",
+                        "wins": 1,
+                        "losses": 1,
+                        "scores": [95.0, 101.0],
+                        "outcomes": ["L", "W"],
+                        "schedule": [1, 1],
+                        "roster": [
+                            {
+                                "playerId": 2,
+                                "name": "RB-2",
+                                "position": "RB",
+                                "lineupSlot": "RB",
+                                "slot_position": "RB",
+                                "stats": {1: {"points": 10.0}, 2: {"points": 20.0}},
+                            }
+                        ],
+                    },
+                ],
+            }
+            (root / "raw" / "2025" / "league_snapshot.json").write_text(json.dumps(snapshot))
+            wk1 = {
+                "year": 2025,
+                "week": 1,
+                "matchups": [
+                    {
+                        "home_team_id": 1,
+                        "away_team_id": 2,
+                        "home_score": 105.0,
+                        "away_score": 95.0,
+                        "home_lineup": snapshot["teams"][0]["roster"],
+                        "away_lineup": snapshot["teams"][1]["roster"],
+                    }
+                ],
+            }
+            wk2 = {
+                "year": 2025,
+                "week": 2,
+                "matchups": [
+                    {
+                        "home_team_id": 1,
+                        "away_team_id": 2,
+                        "home_score": 90.0,
+                        "away_score": 101.0,
+                        "home_lineup": snapshot["teams"][0]["roster"],
+                        "away_lineup": snapshot["teams"][1]["roster"],
+                    }
+                ],
+            }
+            (root / "raw" / "2025" / "box_scores" / "week_1.json").write_text(json.dumps(wk1))
+            (root / "raw" / "2025" / "box_scores" / "week_2.json").write_text(json.dumps(wk2))
+
+            from_context = simulator.run_historical_opponent_backtest(
+                config={
+                    "league_id": 1,
+                    "team_id": 1,
+                    "year": 2025,
+                    "start_year": 2025,
+                    "end_year": 2025,
+                    "context_path": str(root),
+                }
+            )
+
+        self.assertEqual(len(live["opponents"]), len(from_context["opponents"]))
+        self.assertEqual(
+            live["opponents"][0]["quant_metrics"]["games_sampled"],
+            from_context["opponents"][0]["quant_metrics"]["games_sampled"],
+        )
 
     def test_analyze_draft_strategy_does_not_mutate_baseline_ratings(self):
         league = build_league()

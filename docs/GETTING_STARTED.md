@@ -43,6 +43,26 @@ uv run fantasy-decision-maker --config config.json
 uv run fantasy-decision-maker --config config.json --report-only
 ```
 
+## Build Persistent League Context
+
+Build local context for last 3 seasons + current season:
+
+```bash
+uv run fantasy-decision-maker --config config.json --build-context --context-lookback-seasons 3
+```
+
+Force full refresh:
+
+```bash
+uv run fantasy-decision-maker --config config.json --build-context --context-full-refresh
+```
+
+Run historical backtest using local context first:
+
+```bash
+uv run fantasy-decision-maker --config config.json --historical-backtest --use-context
+```
+
 ## Private League Cookies
 
 For private leagues, pass cookies either in `config.json` or via CLI flags:

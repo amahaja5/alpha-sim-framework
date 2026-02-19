@@ -20,6 +20,9 @@ Core package path: `src/alpha_sim_framework/`
   - `AlphaConfig`, `PlayerProjection`, provider protocol
 - `league_adapter.py`
   - `from_espn_league` and adapter dataclasses
+- `league_context.py`
+  - persistent ESPN context build/load
+  - yearly normalized tables + derived behavior summaries
 - `sim_contracts.py`
   - `LeagueLike` protocol contract
 
