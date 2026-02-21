@@ -75,6 +75,16 @@ Optional: set `ODDS_API_KEY` to enrich `odds` from The Odds API free tier.
 uv run gateway-probe --config config.gateway_probe.template.json --output-dir reports/gateway_probe
 ```
 
+## Research Sources
+
+Fantasy football modeling references used for current roadmap and TODO prioritization:
+
+- Becker, A., & Sun, X. A. (2016). *An analytical approach for fantasy football draft and lineup management*. Journal of Quantitative Analysis in Sports. DOI: [10.1515/jqas-2013-0009](https://doi.org/10.1515/jqas-2013-0009)
+- Mlcoch, D., & Hubacek, O. (2024). *Competing in daily fantasy sports using generative models*. International Transactions in Operational Research. DOI: [10.1111/itor.13344](https://doi.org/10.1111/itor.13344)
+- Kissell, R., & Poserina, J. (2017). *Optimal Sports Math, Statistics, and Fantasy*. Academic Press. [Publisher page](https://www.elsevier.com/books/optimal-sports-math-statistics-and-fantasy/kissell/978-0-12-811369-1)
+- Bonello, N., Beel, J., Lawless, S., & Debattista, J. (2019). *Multi-stream Data Analytics for Enhanced Performance Prediction in Fantasy Football*. arXiv. DOI: [10.48550/arXiv.1912.07441](https://doi.org/10.48550/arXiv.1912.07441)
+- Landers, J. R., & Duperrouzel, B. (2019). *Machine Learning Approaches to Competing in Fantasy Leagues for the NFL*. IEEE Transactions on Games. DOI: [10.1109/TG.2018.2841057](https://doi.org/10.1109/TG.2018.2841057)
+
 ## TODO
 
 - Add `player_uncertainty_overrides` output to support variance-level adjustments (not only mean projection shifts).
